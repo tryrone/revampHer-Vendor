@@ -1,50 +1,194 @@
-# Welcome to your Expo app 👋
+# RevampHer Vendor App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A modern React Native mobile application built with Expo for service vendors on the RevampHer platform. This app enables vendors to manage orders, track earnings, view transaction history, and maintain their availability status.
 
-## Get started
+## 📱 Features
 
-1. Install dependencies
+### Authentication & Onboarding
+
+- **Login** - Secure vendor authentication
+- **Account Creation** - New vendor registration
+- **OTP Verification** - Phone number verification
+- **Onboarding** - Guided setup for new vendors
+- **Profile Setup** - Complete vendor profile configuration
+
+### Core Functionality
+
+- **Home Dashboard** - View and manage incoming orders/requests
+- **Order Management** - Detailed order information and processing
+- **Earnings Tracking** - Monitor revenue and financial performance
+- **Transaction History** - Complete record of past transactions
+- **Notifications** - Real-time updates and alerts
+- **Availability Toggle** - Control when you're available to accept orders
+- **Profile Management** - Update vendor information and settings
+
+## 🛠️ Tech Stack
+
+- **Framework**: [Expo](https://expo.dev) ~54.0.30
+- **Runtime**: React Native 0.81.5
+- **Language**: TypeScript ~5.9.2
+- **Navigation**: Expo Router ~6.0.21 (file-based routing)
+- **Styling**: Styled Components ^6.1.13
+- **UI Components**:
+  - @expo/vector-icons
+  - React Navigation
+  - Custom themed components
+
+### Key Dependencies
+
+- `expo-router` - File-based routing system
+- `react-native-gesture-handler` - Gesture handling
+- `react-native-reanimated` - Animations
+- `react-native-safe-area-context` - Safe area handling
+- `expo-haptics` - Haptic feedback
+- `expo-image` - Optimized image component
+- `expo-clipboard` - Clipboard functionality
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js (v18 or higher recommended)
+- Yarn package manager (v1.22.22+)
+- Expo CLI (installed globally or via npx)
+- iOS Simulator (for macOS) or Android Emulator
+
+### Installation
+
+1. **Clone the repository**
+
+   ```bash
+   git clone <repository-url>
+   cd RevampHer-Vendor
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   yarn install
+   ```
+
+   or
 
    ```bash
    npm install
    ```
 
-2. Start the app
+3. **Start the development server**
+
+   ```bash
+   yarn start
+   ```
+
+   or
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+4. **Run on your preferred platform**
+   - **iOS Simulator**: Press `i` in the terminal or run `yarn ios`
+   - **Android Emulator**: Press `a` in the terminal or run `yarn android`
+   - **Web**: Press `w` in the terminal or run `yarn web`
+   - **Expo Go**: Scan the QR code with the Expo Go app on your device
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 📁 Project Structure
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+RevampHer-Vendor/
+├── app/                    # Main application screens (Expo Router)
+│   ├── (tabs)/            # Tab navigation screens
+│   │   ├── index.tsx      # Home/Dashboard
+│   │   ├── earnings.tsx   # Earnings screen
+│   │   ├── history.tsx    # Transaction history
+│   │   └── profile.tsx    # Profile management
+│   ├── login.tsx          # Login screen
+│   ├── create-account.tsx # Registration
+│   ├── otp-verification.tsx
+│   ├── onboarding.tsx
+│   ├── profile-setup.tsx
+│   ├── order-details.tsx
+│   ├── notifications.tsx
+│   ├── availability-toggle.tsx
+│   └── transaction-details.tsx
+├── components/            # Reusable UI components
+│   └── ui/               # UI component library
+├── constants/            # App constants and theme
+│   ├── Colors.ts
+│   └── theme.ts
+├── hooks/                # Custom React hooks
+├── assets/               # Images, icons, and static assets
+└── scripts/              # Utility scripts
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## 🎨 Theming
 
-## Learn more
+The app supports both light and dark modes with a comprehensive theming system:
 
-To learn more about developing your project with Expo, look at the following resources:
+- **Primary Color**: `#308ce8` (Blue)
+- **Dark Mode**: Automatic based on system preferences
+- **Customizable**: Theme constants defined in `constants/theme.ts`
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 📝 Available Scripts
 
-## Join the community
+- `yarn start` - Start the Expo development server
+- `yarn android` - Run on Android emulator/device
+- `yarn ios` - Run on iOS simulator/device
+- `yarn web` - Run in web browser
+- `yarn lint` - Run ESLint
+- `yarn reset-project` - Reset to a blank project template
 
-Join our community of developers creating universal apps.
+## 🔧 Configuration
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### App Configuration
+
+The app configuration is managed in `app.json`:
+
+- App name: RevampHer-Vendor
+- Scheme: `revamphervendor`
+- New Architecture: Enabled
+- Typed Routes: Enabled
+- React Compiler: Enabled
+
+### Environment Setup
+
+Make sure to configure any required environment variables or API endpoints as needed for your deployment.
+
+## 🏗️ Architecture
+
+- **File-based Routing**: Uses Expo Router for navigation
+- **Component-based**: Modular React components
+- **Type-safe**: Full TypeScript support
+- **Styled Components**: CSS-in-JS styling approach
+- **Safe Areas**: Proper handling of device safe areas
+
+## 📱 Platform Support
+
+- ✅ iOS (with tablet support)
+- ✅ Android (with edge-to-edge enabled)
+- ✅ Web (static output)
+
+## 🔐 Security
+
+- Secure authentication flow
+- OTP verification for phone numbers
+- Safe handling of sensitive data
+
+## 🤝 Contributing
+
+1. Create a feature branch
+2. Make your changes
+3. Test on iOS, Android, and Web
+4. Submit a pull request
+
+## 📄 License
+
+This project is private and proprietary.
+
+## 📞 Support
+
+For issues, questions, or contributions, please contact the development team.
+
+---
+
+Built with ❤️ using Expo and React Native
