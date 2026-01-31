@@ -1,0 +1,25 @@
+schema:
+  - ./graphql/schemas/**/*.graphql
+documents:
+  - ./graphql/schemas/**/*.graphql
+overwrite: true
+generates:
+  ./types/gqlReactTypings.generated.tsx:
+    plugins:
+      - add:
+          content: |
+            /* THIS IS A GENERATED FILE - DO NOT MODIFY */
+      - add:
+          content: |
+            /* eslint-disable */
+      - typescript
+      - typescript-operations
+      - typescript-react-apollo
+    config:
+      apolloClientVersion: 4
+      reactApolloImportFrom: "@apollo/client/react"
+      apolloReactHooksImportFrom: "@apollo/client/react"
+      maybeValue: T | undefined
+      withHooks: true
+      defaultBaseOptions:
+        errorPolicy: "all"

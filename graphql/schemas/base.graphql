@@ -1,0 +1,35 @@
+scalar DateTime
+
+enum UserRole {
+  CUSTOMER
+  SALON
+  DELIVERY
+  ADMIN
+}
+
+enum AuthProvider {
+  GOOGLE
+  APPLE
+  EMAIL_PASSWORD
+}
+
+type User {
+  id: ID!
+  fullName: String!
+  email: String
+  phone: String
+  role: UserRole!
+  authProvider: AuthProvider!
+  providerId: String!
+  profileImage: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Query {
+  _empty: String
+}
+
+type Mutation {
+  _empty: String
+}

@@ -1,0 +1,83 @@
+input OAuthInput {
+  provider: AuthProvider!
+  providerId: String!
+  email: String
+  fullName: String!
+  profileImage: String
+  role: UserRole
+}
+
+input RegisterWithEmailInput {
+  fullName: String!
+  email: String!
+  phone: String
+  password: String!
+  role: UserRole!
+}
+
+input LoginWithEmailInput {
+  email: String!
+  password: String!
+}
+
+type AuthPayload {
+  token: String!
+  user: User!
+}
+
+extend type Mutation {
+  loginWithOAuth(input: OAuthInput!): AuthPayload!
+  registerWithEmail(input: RegisterWithEmailInput!): AuthPayload!
+  loginWithEmail(input: LoginWithEmailInput!): AuthPayload!
+}
+
+mutation LoginWithOAuth($input: OAuthInput!) {
+  loginWithOAuth(input: $input) {
+    token
+    user {
+      id
+      fullName
+      email
+      role
+      profileImage
+      authProvider
+      providerId
+      createdAt
+      updatedAt
+    }
+  }
+}
+
+mutation RegisterWithEmail($input: RegisterWithEmailInput!) {
+  registerWithEmail(input: $input) {
+    token
+    user {
+      id
+      fullName
+      email
+      role
+      profileImage
+      authProvider
+      providerId
+      createdAt
+      updatedAt
+    }
+  }
+}
+
+mutation LoginWithEmail($input: LoginWithEmailInput!) {
+  loginWithEmail(input: $input) {
+    token
+    user {
+      id
+      fullName
+      email
+      role
+      profileImage
+      authProvider
+      providerId
+      createdAt
+      updatedAt
+    }
+  }
+}

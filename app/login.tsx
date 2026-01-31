@@ -8,10 +8,27 @@ import {
   Spacing,
 } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import useGoogleSignInHook from "@/hooks/useGoogleSignInHook";
+import {
+  getLocalItem,
+  saveLocalUserData,
+  setAccessToken,
+  setLocalItem,
+} from "@/storage";
+import { useAuthStore } from "@/store";
+import {
+  AuthProvider,
+  useLoginWithEmailMutation,
+  useLoginWithOAuthMutation,
+  UserRole,
+} from "@/types/gqlReactTypings.generated";
+import { formatGqlError } from "@/utils";
+import { showToast } from "@/utils/toast";
 import { MaterialIcons } from "@expo/vector-icons";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { Pressable } from "react-native";
+import { useEffect, useState } from "react";
+import { Platform, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import styled from "styled-components/native";
@@ -134,7 +151,7 @@ const ActionsContainer = styled.View`
   gap: ${Spacing.lg}px;
 `;
 
-const PrimaryButton = styled.Pressable<{ isDark: boolean }>`
+const PrimaryButton = styled.TouchableOpacity<{ isDark: boolean }>`
   width: 100%;
   height: 56px;
   background-color: ${PRIMARY_COLOR};
@@ -268,9 +285,49 @@ export default function LoginScreen() {
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
+  const { setIsLoggedIn, setToken } = useAuthStore();
+
+  const [loginWithOAuth] = useLoginWithOAuthMutation();
+  const [loginWithEmail] = useLoginWithEmailMutation();
+  const { googlePromptAsync, user, googleSignInToken } = useGoogleSignInHook();
+
   const handleLogin = () => {
-    // Navigate to tabs after login
-    router.replace("/(tabs)");
+    if (!email || !password) {
+      showToast({
+        title: "Please fill in all fields",
+        type: "error",
+      });
+      return;
+    }
+
+    loginWithEmail({
+      variables: {
+        input: {
+          email: email,
+          password: password,
+        },
+      },
+      onCompleted: (data) => {
+        if (data.loginWithEmail.user) {
+          router.replace("/(tabs)");
+          setAccessToken(data.loginWithEmail.token);
+          saveLocalUserData({
+            ...data.loginWithEmail.user,
+            notificationsEnabled: true,
+          });
+          setIsLoggedIn(true);
+          setToken(data.loginWithEmail.token);
+        }
+      },
+      onError: (error) => {
+        console.error("Login with email error", error);
+        showToast({
+          title: "Unable to login",
+          text: formatGqlError(error) ?? "Something went wrong",
+          type: "error",
+        });
+      },
+    });
   };
 
   const handleForgotPassword = () => {
@@ -279,18 +336,104 @@ export default function LoginScreen() {
   };
 
   const handleGoogleLogin = () => {
-    // Placeholder for Google login
-    console.log("Google login");
+    googlePromptAsync();
   };
 
-  const handleAppleLogin = () => {
-    // Placeholder for Apple login
-    console.log("Apple login");
+  const handleAppleLogin = async () => {
+    // Apple authentication is only available on iOS
+    if (Platform.OS !== "ios") {
+      console.log("Apple Sign-In is only available on iOS devices");
+      return;
+    }
+
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      const storageKey = `apple_credential_${credential.user}`;
+
+      let storedEmail: string | null = null;
+      let storedFullName: string | null = null;
+      const storedData = await getLocalItem(storageKey);
+      if (storedData) {
+        try {
+          const parsed = JSON.parse(storedData);
+          storedEmail = parsed.email || null;
+          storedFullName = parsed.fullName || null;
+        } catch (e) {
+          console.error("Failed to parse stored Apple credential:", e);
+        }
+      }
+
+      // Use credential values if available, otherwise fall back to stored values
+      const email = credential.email || storedEmail || "";
+      const fullName = credential.fullName
+        ? `${credential.fullName.givenName || ""} ${
+            credential.fullName.familyName || ""
+          }`.trim()
+        : storedFullName || "";
+
+      // Store the values if we got NEW data from this sign-in
+      if (credential.email || credential.fullName) {
+        await setLocalItem(
+          storageKey,
+          JSON.stringify({
+            email: credential.email || storedEmail || "",
+            fullName: credential.fullName
+              ? `${credential.fullName.givenName || ""} ${
+                  credential.fullName.familyName || ""
+                }`.trim()
+              : storedFullName || "",
+          })
+        );
+      }
+
+      loginWithOAuth({
+        variables: {
+          input: {
+            provider: AuthProvider.Apple,
+            providerId: credential.user,
+            email: email || undefined,
+            fullName: fullName || "Apple User",
+            role: UserRole.Salon,
+          },
+        },
+      });
+    } catch (e: any) {
+      if (e.code === "ERR_REQUEST_CANCELED") {
+        // User canceled the sign-in flow
+        console.log("Apple Sign-In was canceled by the user");
+      } else {
+        // Handle other errors
+        console.error("Apple Sign-In error:", e);
+      }
+    }
   };
 
   const handleCreateAccount = () => {
     router.push("/create-account");
   };
+
+  useEffect(() => {
+    if (user && googleSignInToken) {
+      loginWithOAuth({
+        variables: {
+          input: {
+            provider: AuthProvider.Google,
+            providerId: user.id ?? "",
+            email: user.email ?? "",
+            fullName: user.name ?? "Google User",
+            profileImage: user.photo ?? "",
+            role: UserRole.Salon,
+          },
+        },
+      });
+    }
+  }, [user, googleSignInToken]);
 
   return (
     <Container
@@ -402,11 +545,7 @@ export default function LoginScreen() {
           {/* Actions Container */}
           <ActionsContainer>
             {/* Log In Button */}
-            <PrimaryButton
-              isDark={isDark}
-              onPress={handleLogin}
-              android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
-            >
+            <PrimaryButton isDark={isDark} onPress={handleLogin}>
               <PrimaryButtonText>Log In</PrimaryButtonText>
               <MaterialIcons name="arrow-forward" size={20} color="#ffffff" />
             </PrimaryButton>

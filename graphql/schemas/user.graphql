@@ -1,0 +1,101 @@
+extend type User {
+  notificationsEnabled: Boolean!
+  officeAddress: Address
+  defaultAddress: Address
+}
+
+input OfficeAddressInput {
+  address: String!
+  latitude: Float!
+  longitude: Float!
+  label: String
+}
+
+input UpdateProfileInput {
+  fullName: String
+  phone: String
+  notificationsEnabled: Boolean
+  defaultAddressId: ID
+  defaultAddress: OfficeAddressInput
+  officeAddress: OfficeAddressInput
+}
+
+extend type Query {
+  me: User!
+}
+
+extend type Mutation {
+  updateProfile(input: UpdateProfileInput!): User!
+}
+
+query GetMyProfile {
+  me {
+    id
+    fullName
+    email
+    phone
+    role
+    profileImage
+    authProvider
+    providerId
+    notificationsEnabled
+    createdAt
+    updatedAt
+    defaultAddress {
+      id
+      userId
+      label
+      address
+      latitude
+      longitude
+      isDefault
+      createdAt
+    }
+    officeAddress {
+      id
+      userId
+      label
+      address
+      latitude
+      longitude
+      isDefault
+      createdAt
+    }
+  }
+}
+
+mutation UpdateProfile($input: UpdateProfileInput!) {
+  updateProfile(input: $input) {
+    id
+    fullName
+    email
+    phone
+    role
+    profileImage
+    authProvider
+    providerId
+    notificationsEnabled
+    createdAt
+    updatedAt
+    defaultAddress {
+      id
+      userId
+      label
+      address
+      latitude
+      longitude
+      isDefault
+      createdAt
+    }
+    officeAddress {
+      id
+      userId
+      label
+      address
+      latitude
+      longitude
+      isDefault
+      createdAt
+    }
+  }
+}

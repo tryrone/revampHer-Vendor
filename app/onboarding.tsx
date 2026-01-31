@@ -188,11 +188,11 @@ export default function OnboardingScreen() {
             </ThemedText>
 
             {/* Pagination dots */}
-            <View style={styles.pagination}>
+            {/* <View style={styles.pagination}>
               <View style={styles.paginationDotActive} />
               <View style={styles.paginationDot} />
               <View style={styles.paginationDot} />
-            </View>
+            </View> */}
           </View>
         </View>
 

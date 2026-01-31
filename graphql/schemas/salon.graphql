@@ -1,0 +1,110 @@
+input SalonsNearLocationInput {
+  latitude: Float!
+  longitude: Float!
+  radiusInMiles: Float
+}
+
+input SalonLocationInput {
+  address: String!
+  latitude: Float!
+  longitude: Float!
+}
+
+input CompleteSalonOnboardingInput {
+  profileImageUrl: String
+  businessName: String!
+  location: SalonLocationInput!
+  serviceRadiusKm: Int
+}
+
+extend type Query {
+  salons: [Salon!]!
+  salonsNearLocation(input: SalonsNearLocationInput!): [Salon!]!
+  mySalon: Salon
+}
+
+extend type Mutation {
+  completeSalonOnboarding(input: CompleteSalonOnboardingInput!): Salon!
+  setSalonOnline(isOnline: Boolean!): Salon!
+}
+
+query Salons {
+  salons {
+    id
+    name
+    address
+    latitude
+    longitude
+    serviceRadiusKm
+    rating
+    isVerified
+    imageUrl
+    isOnline
+    onboardingComplete
+  }
+}
+
+query SalonsNearLocation($input: SalonsNearLocationInput!) {
+  salonsNearLocation(input: $input) {
+    id
+    name
+    address
+    latitude
+    longitude
+    serviceRadiusKm
+    rating
+    isVerified
+    imageUrl
+    isOnline
+    onboardingComplete
+  }
+}
+
+query MySalon {
+  mySalon {
+    id
+    name
+    address
+    latitude
+    longitude
+    serviceRadiusKm
+    rating
+    isVerified
+    imageUrl
+    isOnline
+    onboardingComplete
+    createdAt
+  }
+}
+
+mutation CompleteSalonOnboarding($input: CompleteSalonOnboardingInput!) {
+  completeSalonOnboarding(input: $input) {
+    id
+    name
+    address
+    latitude
+    longitude
+    serviceRadiusKm
+    rating
+    isVerified
+    imageUrl
+    isOnline
+    onboardingComplete
+  }
+}
+
+mutation SetSalonOnline($isOnline: Boolean!) {
+  setSalonOnline(isOnline: $isOnline) {
+    id
+    name
+    address
+    latitude
+    longitude
+    serviceRadiusKm
+    rating
+    isVerified
+    imageUrl
+    isOnline
+    onboardingComplete
+  }
+}

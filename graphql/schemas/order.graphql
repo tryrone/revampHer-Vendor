@@ -1,0 +1,388 @@
+enum OrderStatus {
+  CREATED
+  PICKUP_ASSIGNED
+  PICKED_UP
+  AT_SALON
+  REVAMPING
+  READY_FOR_DELIVERY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderItemType {
+  SERVICE
+  PRODUCT
+}
+
+enum StatusActor {
+  SYSTEM
+  SALON
+  RIDER
+}
+
+type Address {
+  id: ID
+  userId: String
+  label: String
+  address: String!
+  latitude: Float!
+  longitude: Float!
+  isDefault: Boolean!
+  createdAt: DateTime
+}
+
+type OrderItem {
+  id: ID!
+  orderId: String!
+  itemType: OrderItemType!
+  referenceId: String!
+  serviceId: String
+  nameSnapshot: String!
+  priceSnapshot: Float!
+  quantity: Int!
+  hairType: String
+  hairLength: String
+  createdAt: DateTime!
+  service: Service
+  notes: String
+  orderItemUrl: String
+}
+
+type Service {
+  id: ID!
+  name: String!
+  description: String
+  basePrice: Float!
+  estimatedDays: Int!
+  category: String!
+  isActive: Boolean!
+  createdAt: DateTime!
+  isPopular: Boolean!
+  isBestValue: Boolean!
+}
+
+type OrderStatusEvent {
+  id: ID!
+  orderId: String!
+  status: OrderStatus!
+  message: String
+  actor: StatusActor!
+  createdAt: DateTime!
+}
+
+type Order {
+  id: ID!
+  customerId: String!
+  salonId: String
+  pickupAddressId: String!
+  phoneNumber: String
+  status: OrderStatus!
+  totalAmount: Float!
+  requestedReturnDate: DateTime
+  requestedReturnDays: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  customer: User!
+  salon: Salon
+  pickupAddress: Address!
+  items: [OrderItem!]!
+  statusEvents: [OrderStatusEvent!]!
+  payments: [Payment!]!
+}
+
+type Salon {
+  id: ID!
+  userId: String!
+  name: String!
+  address: String!
+  latitude: Float!
+  longitude: Float!
+  serviceRadiusKm: Int!
+  rating: Float
+  isVerified: Boolean!
+  imageUrl: String
+  isOnline: Boolean!
+  onboardingComplete: Boolean!
+  createdAt: DateTime!
+}
+
+type Payment {
+  id: ID!
+  orderId: String!
+  customerId: String!
+  provider: String!
+  reference: String!
+  amount: Float!
+  status: String!
+  paidAt: DateTime
+  createdAt: DateTime!
+}
+
+input HairItemInput {
+  serviceId: ID!
+  description: String
+  notes: String
+  hairType: String!
+  hairLength: String!
+  orderItemUrl: String
+}
+
+input PickupAddressInput {
+  address: String!
+  latitude: Float!
+  longitude: Float!
+  label: String
+}
+
+input CreateRevampOrderInput {
+  pickupAddress: PickupAddressInput!
+  phoneNumber: String
+  hairItems: [HairItemInput!]!
+  notes: String
+  requestedReturnDate: DateTime
+  requestedReturnDays: Int
+}
+
+type CreateRevampOrderPayload {
+  order: Order!
+}
+
+input RecentOrdersInput {
+  cursor: String
+  limit: Int
+}
+
+type RecentOrdersConnection {
+  orders: [Order!]!
+  hasNextPage: Boolean!
+  endCursor: String
+}
+
+extend type Query {
+  services: [Service!]!
+  recentOrdersInProgress(input: RecentOrdersInput): RecentOrdersConnection!
+  orderHistory(input: RecentOrdersInput): RecentOrdersConnection!
+  order(id: ID!): Order!
+}
+
+extend type Mutation {
+  createRevampOrder(input: CreateRevampOrderInput!): CreateRevampOrderPayload!
+}
+
+query Services {
+  services {
+    id
+    name
+    description
+    basePrice
+    estimatedDays
+    category
+    isActive
+    createdAt
+    isPopular
+    isBestValue
+  }
+}
+
+query RecentOrdersInProgress($input: RecentOrdersInput) {
+  recentOrdersInProgress(input: $input) {
+    orders {
+      id
+      customerId
+      salonId
+      pickupAddressId
+      status
+      totalAmount
+      createdAt
+      updatedAt
+      items {
+        id
+        nameSnapshot
+        priceSnapshot
+        quantity
+        hairType
+        hairLength
+        service {
+          id
+          name
+          description
+          basePrice
+          estimatedDays
+          category
+          isActive
+        }
+        notes
+        orderItemUrl
+      }
+    }
+    hasNextPage
+  }
+}
+
+query OrderHistory($input: RecentOrdersInput) {
+  orderHistory(input: $input) {
+    orders {
+      id
+      customerId
+      salonId
+      pickupAddressId
+      status
+      totalAmount
+      createdAt
+      updatedAt
+      items {
+        id
+        nameSnapshot
+        priceSnapshot
+        quantity
+        hairType
+        hairLength
+        service {
+          id
+          name
+          description
+          basePrice
+          estimatedDays
+          category
+          isActive
+        }
+        notes
+        orderItemUrl
+      }
+    }
+    hasNextPage
+    endCursor
+  }
+}
+
+mutation CreateRevampOrder($input: CreateRevampOrderInput!) {
+  createRevampOrder(input: $input) {
+    order {
+      id
+      customerId
+      salonId
+      pickupAddressId
+      status
+      totalAmount
+      createdAt
+      updatedAt
+      customer {
+        id
+        fullName
+        email
+        role
+        profileImage
+        authProvider
+        providerId
+        createdAt
+        updatedAt
+      }
+      items {
+        id
+        nameSnapshot
+        priceSnapshot
+        quantity
+        hairType
+        hairLength
+        notes
+        orderItemUrl
+      }
+    }
+  }
+}
+
+query GetOrder($id: ID!) {
+  order(id: $id) {
+    id
+    customerId
+    salonId
+    pickupAddressId
+    phoneNumber
+    status
+    totalAmount
+    requestedReturnDate
+    requestedReturnDays
+    createdAt
+    updatedAt
+    customer {
+      id
+      fullName
+      email
+      phone
+      role
+      profileImage
+      authProvider
+      providerId
+      createdAt
+      updatedAt
+    }
+    salon {
+      id
+      userId
+      name
+      address
+      latitude
+      longitude
+      serviceRadiusKm
+      rating
+      isVerified
+      imageUrl
+      createdAt
+    }
+    pickupAddress {
+      id
+      userId
+      label
+      address
+      latitude
+      longitude
+      isDefault
+      createdAt
+    }
+    items {
+      id
+      orderId
+      itemType
+      referenceId
+      serviceId
+      nameSnapshot
+      priceSnapshot
+      quantity
+      hairType
+      hairLength
+      notes
+      orderItemUrl
+      createdAt
+      service {
+        id
+        name
+        description
+        basePrice
+        estimatedDays
+        category
+        isActive
+        createdAt
+      }
+    }
+    statusEvents {
+      id
+      orderId
+      status
+      message
+      actor
+      createdAt
+    }
+    payments {
+      id
+      orderId
+      customerId
+      provider
+      reference
+      amount
+      status
+      paidAt
+      createdAt
+    }
+  }
+}
