@@ -199,7 +199,7 @@ const SocialButtonsContainer = styled.View`
   gap: ${Spacing.lg}px;
 `;
 
-const SocialButton = styled.Pressable<{ isDark: boolean }>`
+const SocialButton = styled.TouchableOpacity<{ isDark: boolean }>`
   flex: 1;
   height: 56px;
   background-color: ${(props) =>
@@ -317,6 +317,10 @@ export default function LoginScreen() {
           });
           setIsLoggedIn(true);
           setToken(data.loginWithEmail.token);
+
+          if (!data.loginWithEmail.user.profileSetupComplete) {
+            return router.replace("/profile-setup");
+          }
         }
       },
       onError: (error) => {
@@ -402,6 +406,21 @@ export default function LoginScreen() {
             role: UserRole.Salon,
           },
         },
+        onCompleted: (data) => {
+          if (data.loginWithOAuth.user) {
+            if (!data.loginWithOAuth.user.profileSetupComplete) {
+              router.replace("/profile-setup");
+              return;
+            }
+          }
+        },
+        onError: (error) => {
+          showToast({
+            title: "Apple sign in failed",
+            text: formatGqlError(error) ?? "Something went wrong",
+            type: "error",
+          });
+        },
       });
     } catch (e: any) {
       if (e.code === "ERR_REQUEST_CANCELED") {
@@ -430,6 +449,29 @@ export default function LoginScreen() {
             profileImage: user.photo ?? "",
             role: UserRole.Salon,
           },
+        },
+        onCompleted: (data) => {
+          if (data.loginWithOAuth.user) {
+            if (!data.loginWithOAuth.user.profileSetupComplete) {
+              router.replace("/profile-setup");
+              return;
+            }
+            setAccessToken(data.loginWithOAuth.token);
+            saveLocalUserData({
+              ...data.loginWithOAuth.user,
+              notificationsEnabled: true,
+            });
+            setIsLoggedIn(true);
+            setToken(data.loginWithOAuth.token);
+            router.replace("/(tabs)");
+          }
+        },
+        onError: (error) => {
+          showToast({
+            title: "Google sign in failed",
+            text: formatGqlError(error) ?? "Something went wrong",
+            type: "error",
+          });
         },
       });
     }
@@ -559,28 +601,12 @@ export default function LoginScreen() {
 
             {/* Social Login Buttons */}
             <SocialButtonsContainer>
-              <SocialButton
-                isDark={isDark}
-                onPress={handleGoogleLogin}
-                android_ripple={{
-                  color: isDark
-                    ? "rgba(255, 255, 255, 0.1)"
-                    : "rgba(0, 0, 0, 0.05)",
-                }}
-              >
+              <SocialButton isDark={isDark} onPress={handleGoogleLogin}>
                 <GoogleLogo />
                 <SocialButtonText isDark={isDark}>Google</SocialButtonText>
               </SocialButton>
 
-              <SocialButton
-                isDark={isDark}
-                onPress={handleAppleLogin}
-                android_ripple={{
-                  color: isDark
-                    ? "rgba(255, 255, 255, 0.1)"
-                    : "rgba(0, 0, 0, 0.05)",
-                }}
-              >
+              <SocialButton isDark={isDark} onPress={handleAppleLogin}>
                 <AppleLogo isDark={isDark} />
                 <SocialButtonText isDark={isDark}>Apple</SocialButtonText>
               </SocialButton>

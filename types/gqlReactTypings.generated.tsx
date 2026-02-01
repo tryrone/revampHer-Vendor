@@ -89,8 +89,11 @@ export type Mutation = {
   loginWithEmail: AuthPayload;
   loginWithOAuth: AuthPayload;
   registerWithEmail: AuthPayload;
+  sendEmailVerificationOtp: SendEmailOtpPayload;
   setSalonOnline: Salon;
   updateProfile: User;
+  updateSalonProfile: Salon;
+  verifyEmail: VerifyEmailPayload;
 };
 
 
@@ -119,6 +122,11 @@ export type MutationRegisterWithEmailArgs = {
 };
 
 
+export type MutationSendEmailVerificationOtpArgs = {
+  email: Scalars['String'];
+};
+
+
 export type MutationSetSalonOnlineArgs = {
   isOnline: Scalars['Boolean'];
 };
@@ -126,6 +134,16 @@ export type MutationSetSalonOnlineArgs = {
 
 export type MutationUpdateProfileArgs = {
   input: UpdateProfileInput;
+};
+
+
+export type MutationUpdateSalonProfileArgs = {
+  input: UpdateSalonProfileInput;
+};
+
+
+export type MutationVerifyEmailArgs = {
+  input: VerifyEmailInput;
 };
 
 export type OAuthInput = {
@@ -312,6 +330,11 @@ export type SalonsNearLocationInput = {
   radiusInMiles?: InputMaybe<Scalars['Float']>;
 };
 
+export type SendEmailOtpPayload = {
+  __typename?: 'SendEmailOtpPayload';
+  success: Scalars['Boolean'];
+};
+
 export type Service = {
   __typename?: 'Service';
   basePrice: Scalars['Float'];
@@ -341,18 +364,26 @@ export type UpdateProfileInput = {
   phone?: InputMaybe<Scalars['String']>;
 };
 
+export type UpdateSalonProfileInput = {
+  businessName: Scalars['String'];
+  location: SalonLocationInput;
+  profileImageUrl?: InputMaybe<Scalars['String']>;
+};
+
 export type User = {
   __typename?: 'User';
   authProvider: AuthProvider;
   createdAt: Scalars['DateTime'];
   defaultAddress?: Maybe<Address>;
   email?: Maybe<Scalars['String']>;
+  emailVerified: Scalars['Boolean'];
   fullName: Scalars['String'];
   id: Scalars['ID'];
   notificationsEnabled: Scalars['Boolean'];
   officeAddress?: Maybe<Address>;
   phone?: Maybe<Scalars['String']>;
   profileImage?: Maybe<Scalars['String']>;
+  profileSetupComplete: Scalars['Boolean'];
   providerId: Scalars['String'];
   role: UserRole;
   updatedAt: Scalars['DateTime'];
@@ -365,26 +396,50 @@ export enum UserRole {
   Salon = 'SALON'
 }
 
+export type VerifyEmailInput = {
+  email: Scalars['String'];
+  otp: Scalars['String'];
+};
+
+export type VerifyEmailPayload = {
+  __typename?: 'VerifyEmailPayload';
+  success: Scalars['Boolean'];
+};
+
 export type LoginWithOAuthMutationVariables = Exact<{
   input: OAuthInput;
 }>;
 
 
-export type LoginWithOAuthMutation = { __typename?: 'Mutation', loginWithOAuth: { __typename?: 'AuthPayload', token: string, user: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, createdAt: any, updatedAt: any } } };
+export type LoginWithOAuthMutation = { __typename?: 'Mutation', loginWithOAuth: { __typename?: 'AuthPayload', token: string, user: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, createdAt: any, updatedAt: any, emailVerified: boolean, notificationsEnabled: boolean, profileSetupComplete: boolean } } };
 
 export type RegisterWithEmailMutationVariables = Exact<{
   input: RegisterWithEmailInput;
 }>;
 
 
-export type RegisterWithEmailMutation = { __typename?: 'Mutation', registerWithEmail: { __typename?: 'AuthPayload', token: string, user: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, createdAt: any, updatedAt: any } } };
+export type RegisterWithEmailMutation = { __typename?: 'Mutation', registerWithEmail: { __typename?: 'AuthPayload', token: string, user: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, createdAt: any, updatedAt: any, emailVerified: boolean, notificationsEnabled: boolean, profileSetupComplete: boolean } } };
 
 export type LoginWithEmailMutationVariables = Exact<{
   input: LoginWithEmailInput;
 }>;
 
 
-export type LoginWithEmailMutation = { __typename?: 'Mutation', loginWithEmail: { __typename?: 'AuthPayload', token: string, user: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, createdAt: any, updatedAt: any } } };
+export type LoginWithEmailMutation = { __typename?: 'Mutation', loginWithEmail: { __typename?: 'AuthPayload', token: string, user: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, createdAt: any, updatedAt: any, emailVerified: boolean, notificationsEnabled: boolean, profileSetupComplete: boolean } } };
+
+export type SendEmailVerificationOtpMutationVariables = Exact<{
+  email: Scalars['String'];
+}>;
+
+
+export type SendEmailVerificationOtpMutation = { __typename?: 'Mutation', sendEmailVerificationOtp: { __typename?: 'SendEmailOtpPayload', success: boolean } };
+
+export type VerifyEmailMutationVariables = Exact<{
+  input: VerifyEmailInput;
+}>;
+
+
+export type VerifyEmailMutation = { __typename?: 'Mutation', verifyEmail: { __typename?: 'VerifyEmailPayload', success: boolean } };
 
 export type ServicesQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -443,6 +498,13 @@ export type CompleteSalonOnboardingMutationVariables = Exact<{
 
 export type CompleteSalonOnboardingMutation = { __typename?: 'Mutation', completeSalonOnboarding: { __typename?: 'Salon', id: string, name: string, address: string, latitude: number, longitude: number, serviceRadiusKm: number, rating?: number | undefined, isVerified: boolean, imageUrl?: string | undefined, isOnline: boolean, onboardingComplete: boolean } };
 
+export type UpdateSalonProfileMutationVariables = Exact<{
+  input: UpdateSalonProfileInput;
+}>;
+
+
+export type UpdateSalonProfileMutation = { __typename?: 'Mutation', updateSalonProfile: { __typename?: 'Salon', id: string, name: string, address: string, latitude: number, longitude: number, serviceRadiusKm: number, rating?: number | undefined, isVerified: boolean, imageUrl?: string | undefined, isOnline: boolean, onboardingComplete: boolean } };
+
 export type SetSalonOnlineMutationVariables = Exact<{
   isOnline: Scalars['Boolean'];
 }>;
@@ -453,14 +515,14 @@ export type SetSalonOnlineMutation = { __typename?: 'Mutation', setSalonOnline: 
 export type GetMyProfileQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetMyProfileQuery = { __typename?: 'Query', me: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, phone?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, notificationsEnabled: boolean, createdAt: any, updatedAt: any, defaultAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined, officeAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined } };
+export type GetMyProfileQuery = { __typename?: 'Query', me: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, phone?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, notificationsEnabled: boolean, profileSetupComplete: boolean, createdAt: any, updatedAt: any, defaultAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined, officeAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined } };
 
 export type UpdateProfileMutationVariables = Exact<{
   input: UpdateProfileInput;
 }>;
 
 
-export type UpdateProfileMutation = { __typename?: 'Mutation', updateProfile: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, phone?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, notificationsEnabled: boolean, createdAt: any, updatedAt: any, defaultAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined, officeAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined } };
+export type UpdateProfileMutation = { __typename?: 'Mutation', updateProfile: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, phone?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, notificationsEnabled: boolean, profileSetupComplete: boolean, createdAt: any, updatedAt: any, defaultAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined, officeAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined } };
 
 
 export const LoginWithOAuthDocument = gql`
@@ -477,6 +539,9 @@ export const LoginWithOAuthDocument = gql`
       providerId
       createdAt
       updatedAt
+      emailVerified
+      notificationsEnabled
+      profileSetupComplete
     }
   }
 }
@@ -521,6 +586,9 @@ export const RegisterWithEmailDocument = gql`
       providerId
       createdAt
       updatedAt
+      emailVerified
+      notificationsEnabled
+      profileSetupComplete
     }
   }
 }
@@ -565,6 +633,9 @@ export const LoginWithEmailDocument = gql`
       providerId
       createdAt
       updatedAt
+      emailVerified
+      notificationsEnabled
+      profileSetupComplete
     }
   }
 }
@@ -595,6 +666,72 @@ export function useLoginWithEmailMutation(baseOptions?: ApolloReactHooks.Mutatio
 export type LoginWithEmailMutationHookResult = ReturnType<typeof useLoginWithEmailMutation>;
 export type LoginWithEmailMutationResult = Apollo.MutationResult<LoginWithEmailMutation>;
 export type LoginWithEmailMutationOptions = Apollo.BaseMutationOptions<LoginWithEmailMutation, LoginWithEmailMutationVariables>;
+export const SendEmailVerificationOtpDocument = gql`
+    mutation SendEmailVerificationOtp($email: String!) {
+  sendEmailVerificationOtp(email: $email) {
+    success
+  }
+}
+    `;
+export type SendEmailVerificationOtpMutationFn = Apollo.MutationFunction<SendEmailVerificationOtpMutation, SendEmailVerificationOtpMutationVariables>;
+
+/**
+ * __useSendEmailVerificationOtpMutation__
+ *
+ * To run a mutation, you first call `useSendEmailVerificationOtpMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useSendEmailVerificationOtpMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [sendEmailVerificationOtpMutation, { data, loading, error }] = useSendEmailVerificationOtpMutation({
+ *   variables: {
+ *      email: // value for 'email'
+ *   },
+ * });
+ */
+export function useSendEmailVerificationOtpMutation(baseOptions?: ApolloReactHooks.MutationHookOptions<SendEmailVerificationOtpMutation, SendEmailVerificationOtpMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return ApolloReactHooks.useMutation<SendEmailVerificationOtpMutation, SendEmailVerificationOtpMutationVariables>(SendEmailVerificationOtpDocument, options);
+      }
+export type SendEmailVerificationOtpMutationHookResult = ReturnType<typeof useSendEmailVerificationOtpMutation>;
+export type SendEmailVerificationOtpMutationResult = Apollo.MutationResult<SendEmailVerificationOtpMutation>;
+export type SendEmailVerificationOtpMutationOptions = Apollo.BaseMutationOptions<SendEmailVerificationOtpMutation, SendEmailVerificationOtpMutationVariables>;
+export const VerifyEmailDocument = gql`
+    mutation VerifyEmail($input: VerifyEmailInput!) {
+  verifyEmail(input: $input) {
+    success
+  }
+}
+    `;
+export type VerifyEmailMutationFn = Apollo.MutationFunction<VerifyEmailMutation, VerifyEmailMutationVariables>;
+
+/**
+ * __useVerifyEmailMutation__
+ *
+ * To run a mutation, you first call `useVerifyEmailMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useVerifyEmailMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [verifyEmailMutation, { data, loading, error }] = useVerifyEmailMutation({
+ *   variables: {
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useVerifyEmailMutation(baseOptions?: ApolloReactHooks.MutationHookOptions<VerifyEmailMutation, VerifyEmailMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return ApolloReactHooks.useMutation<VerifyEmailMutation, VerifyEmailMutationVariables>(VerifyEmailDocument, options);
+      }
+export type VerifyEmailMutationHookResult = ReturnType<typeof useVerifyEmailMutation>;
+export type VerifyEmailMutationResult = Apollo.MutationResult<VerifyEmailMutation>;
+export type VerifyEmailMutationOptions = Apollo.BaseMutationOptions<VerifyEmailMutation, VerifyEmailMutationVariables>;
 export const ServicesDocument = gql`
     query Services {
   services {
@@ -1131,6 +1268,49 @@ export function useCompleteSalonOnboardingMutation(baseOptions?: ApolloReactHook
 export type CompleteSalonOnboardingMutationHookResult = ReturnType<typeof useCompleteSalonOnboardingMutation>;
 export type CompleteSalonOnboardingMutationResult = Apollo.MutationResult<CompleteSalonOnboardingMutation>;
 export type CompleteSalonOnboardingMutationOptions = Apollo.BaseMutationOptions<CompleteSalonOnboardingMutation, CompleteSalonOnboardingMutationVariables>;
+export const UpdateSalonProfileDocument = gql`
+    mutation UpdateSalonProfile($input: UpdateSalonProfileInput!) {
+  updateSalonProfile(input: $input) {
+    id
+    name
+    address
+    latitude
+    longitude
+    serviceRadiusKm
+    rating
+    isVerified
+    imageUrl
+    isOnline
+    onboardingComplete
+  }
+}
+    `;
+export type UpdateSalonProfileMutationFn = Apollo.MutationFunction<UpdateSalonProfileMutation, UpdateSalonProfileMutationVariables>;
+
+/**
+ * __useUpdateSalonProfileMutation__
+ *
+ * To run a mutation, you first call `useUpdateSalonProfileMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateSalonProfileMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [updateSalonProfileMutation, { data, loading, error }] = useUpdateSalonProfileMutation({
+ *   variables: {
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useUpdateSalonProfileMutation(baseOptions?: ApolloReactHooks.MutationHookOptions<UpdateSalonProfileMutation, UpdateSalonProfileMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return ApolloReactHooks.useMutation<UpdateSalonProfileMutation, UpdateSalonProfileMutationVariables>(UpdateSalonProfileDocument, options);
+      }
+export type UpdateSalonProfileMutationHookResult = ReturnType<typeof useUpdateSalonProfileMutation>;
+export type UpdateSalonProfileMutationResult = Apollo.MutationResult<UpdateSalonProfileMutation>;
+export type UpdateSalonProfileMutationOptions = Apollo.BaseMutationOptions<UpdateSalonProfileMutation, UpdateSalonProfileMutationVariables>;
 export const SetSalonOnlineDocument = gql`
     mutation SetSalonOnline($isOnline: Boolean!) {
   setSalonOnline(isOnline: $isOnline) {
@@ -1186,6 +1366,7 @@ export const GetMyProfileDocument = gql`
     authProvider
     providerId
     notificationsEnabled
+    profileSetupComplete
     createdAt
     updatedAt
     defaultAddress {
@@ -1250,6 +1431,7 @@ export const UpdateProfileDocument = gql`
     authProvider
     providerId
     notificationsEnabled
+    profileSetupComplete
     createdAt
     updatedAt
     defaultAddress {

@@ -1,15 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { ScrollView, Pressable, View } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
-import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
-import styled from "styled-components/native";
+import { ENV } from "@/constants";
 import {
   BorderRadius,
   Colors,
@@ -19,6 +8,26 @@ import {
   Spacing,
 } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { getAccessToken } from "@/storage";
+import { useAuthStore } from "@/store";
+import {
+  useMySalonQuery,
+  useUpdateSalonProfileMutation,
+} from "@/types/gqlReactTypings.generated";
+import { showToast } from "@/utils/toast";
+import { MaterialIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Modal } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import styled from "styled-components/native";
 
 // Styled Components
 const Container = styled.View<{ isDark: boolean }>`
@@ -81,10 +90,6 @@ const ProfileImageContainer = styled.View<{ isDark: boolean }>`
   width: 112px;
   height: 112px;
   border-radius: 56px;
-  border-width: 4px;
-  border-color: ${(props) =>
-    props.isDark ? Colors.dark.backgroundTertiary : Colors.light.background};
-  overflow: hidden;
   shadow-color: rgba(0, 0, 0, 0.1);
   shadow-offset: 0px 4px;
   shadow-opacity: 1;
@@ -103,12 +108,14 @@ const ProfileImagePlaceholder = styled.View<{ isDark: boolean }>`
   height: 112px;
   border-radius: 56px;
   background-color: ${(props) =>
-    props.isDark ? Colors.dark.backgroundTertiary : Colors.light.backgroundTertiary};
+    props.isDark
+      ? Colors.dark.backgroundTertiary
+      : Colors.light.backgroundTertiary};
   align-items: center;
   justify-content: center;
 `;
 
-const EditButtonOverlay = styled.Pressable<{ isDark: boolean }>`
+const EditButtonOverlay = styled.TouchableOpacity<{ isDark: boolean }>`
   position: absolute;
   bottom: 0;
   right: 0;
@@ -151,8 +158,7 @@ const BusinessName = styled.Text<{ isDark: boolean }>`
 const LocationText = styled.Text<{ isDark: boolean }>`
   font-size: ${FontSizes.sm}px;
   font-weight: ${FontWeights.medium};
-  color: ${(props) =>
-    props.isDark ? Colors.dark.textSecondary : "#4e7397"};
+  color: ${(props) => (props.isDark ? Colors.dark.textSecondary : "#4e7397")};
   margin-top: ${Spacing.xs}px;
 `;
 
@@ -223,8 +229,7 @@ const AvailabilityTitle = styled.Text<{ isDark: boolean }>`
 const AvailabilitySubtitle = styled.Text<{ isDark: boolean }>`
   font-size: ${FontSizes.sm}px;
   font-weight: ${FontWeights.normal};
-  color: ${(props) =>
-    props.isDark ? Colors.dark.textSecondary : "#4e7397"};
+  color: ${(props) => (props.isDark ? Colors.dark.textSecondary : "#4e7397")};
 `;
 
 const Section = styled.View`
@@ -237,8 +242,7 @@ const SectionLabel = styled.Text<{ isDark: boolean }>`
   font-weight: ${FontWeights.bold};
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: ${(props) =>
-    props.isDark ? Colors.dark.text : Colors.light.text};
+  color: ${(props) => (props.isDark ? Colors.dark.text : Colors.light.text)};
   opacity: 0.7;
   margin-bottom: ${Spacing.md}px;
   margin-left: ${Spacing.sm}px;
@@ -293,8 +297,7 @@ const ListItemTitle = styled.Text<{ isDark: boolean }>`
 
 const ListItemSubtitle = styled.Text<{ isDark: boolean }>`
   font-size: ${FontSizes.xs}px;
-  color: ${(props) =>
-    props.isDark ? Colors.dark.textSecondary : "#4e7397"};
+  color: ${(props) => (props.isDark ? Colors.dark.textSecondary : "#4e7397")};
 `;
 
 const ListItemRight = styled.View`
@@ -318,8 +321,7 @@ const BadgeText = styled.Text<{ isDark: boolean }>`
     props.isDark ? Colors.dark.textSecondary : Colors.light.textSecondary};
 `;
 
-const LogoutButton = styled.Pressable<{ isDark: boolean }>`
-  width: 100%;
+const LogoutButton = styled.TouchableOpacity<{ isDark: boolean }>`
   flex-direction: row;
   align-items: center;
   justify-content: center;
@@ -340,13 +342,88 @@ const LogoutButtonText = styled.Text<{ isDark: boolean }>`
   color: ${(props) => (props.isDark ? "#fca5a5" : "#dc2626")};
 `;
 
+// Logout modal
+const LOGOUT_ICON_COLOR = "#dc2626";
+const ModalOverlay = styled.Pressable`
+  flex: 1;
+  background-color: rgba(0, 0, 0, 0.5);
+  justify-content: center;
+  align-items: center;
+  padding: ${Spacing.xl}px;
+`;
+const LogoutModalBox = styled.View<{ isDark: boolean }>`
+  width: 100%;
+  max-width: 340px;
+  border-radius: ${BorderRadius["2xl"]}px;
+  padding: ${Spacing["2xl"]}px;
+  background-color: ${(props) =>
+    props.isDark ? Colors.dark.background : Colors.light.background};
+  align-items: center;
+`;
+const LogoutModalIconCircle = styled.View`
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background-color: ${LOGOUT_ICON_COLOR};
+  align-items: center;
+  justify-content: center;
+  margin-bottom: ${Spacing.lg}px;
+`;
+const LogoutModalTitle = styled.Text<{ isDark: boolean }>`
+  font-size: ${FontSizes["2xl"]}px;
+  font-weight: ${FontWeights.bold};
+  color: ${(props) => (props.isDark ? Colors.dark.text : Colors.light.text)};
+  margin-bottom: ${Spacing.sm}px;
+`;
+const LogoutModalMessage = styled.Text<{ isDark: boolean }>`
+  font-size: ${FontSizes.base}px;
+  font-weight: ${FontWeights.normal};
+  color: ${(props) =>
+    props.isDark ? Colors.dark.textSecondary : Colors.light.textSecondary};
+  text-align: center;
+  margin-bottom: ${Spacing.xl}px;
+`;
+const LogoutModalButtons = styled.View`
+  width: 100%;
+  gap: ${Spacing.md}px;
+`;
+const LogoutModalConfirmButton = styled.Pressable`
+  width: 100%;
+  height: 48px;
+  border-radius: ${BorderRadius.xl}px;
+  background-color: ${LOGOUT_ICON_COLOR};
+  align-items: center;
+  justify-content: center;
+`;
+const LogoutModalConfirmButtonText = styled.Text`
+  font-size: ${FontSizes.base}px;
+  font-weight: ${FontWeights.bold};
+  color: #ffffff;
+`;
+const LogoutModalCancelButton = styled.Pressable<{ isDark: boolean }>`
+  width: 100%;
+  height: 48px;
+  border-radius: ${BorderRadius.xl}px;
+  background-color: ${(props) =>
+    props.isDark ? Colors.dark.backgroundTertiary : Colors.light.background};
+  border-width: 1px;
+  border-color: ${(props) =>
+    props.isDark ? Colors.dark.border : Colors.light.border};
+  align-items: center;
+  justify-content: center;
+`;
+const LogoutModalCancelButtonText = styled.Text<{ isDark: boolean }>`
+  font-size: ${FontSizes.base}px;
+  font-weight: ${FontWeights.semibold};
+  color: ${(props) => (props.isDark ? Colors.dark.text : Colors.light.text)};
+`;
+
 const VersionText = styled.Text<{ isDark: boolean }>`
   font-size: ${FontSizes.xs}px;
   color: ${(props) =>
     props.isDark ? Colors.dark.textTertiary : Colors.light.textTertiary};
   text-align: center;
   margin-top: ${Spacing.md}px;
-  margin-bottom: ${Spacing["2xl"]}px;
 `;
 
 // Toggle Switch Components
@@ -361,8 +438,8 @@ const ToggleContainer = styled.Pressable<{
     props.isChecked
       ? PRIMARY_COLOR
       : props.isDark
-        ? Colors.dark.border
-        : "#e2e8f0"};
+      ? Colors.dark.border
+      : "#e2e8f0"};
   padding: ${Spacing.xs}px;
   justify-content: center;
 `;
@@ -420,7 +497,8 @@ function ToggleSwitch({
         color: value ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.1)",
         borderless: false,
         radius: 24,
-      }}>
+      }}
+    >
       <ToggleThumb style={thumbStyle} isDark={isDark}>
         <Animated.View style={iconStyle}>
           <MaterialIcons name="check" size={14} color={PRIMARY_COLOR} />
@@ -435,11 +513,106 @@ export default function ProfileScreen() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const isDark = colorScheme === "dark";
+  const logout = useAuthStore((s) => s.logout);
+  const token = useAuthStore((s) => s.token);
+
+  const { data } = useMySalonQuery();
+  const mySalon = data?.mySalon;
+  const [updateSalonProfile] = useUpdateSalonProfileMutation();
 
   const [isAcceptingBookings, setIsAcceptingBookings] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [uploadingStoreImage, setUploadingStoreImage] = useState(false);
 
-  const handleEditProfile = () => {
-    console.log("Edit profile picture");
+  const handlePickAndUploadStoreImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      showToast({
+        type: "error",
+        title: "Permission required",
+        text: "Permission to access your photos is required to upload a profile image.",
+      });
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    if (!mySalon) {
+      showToast({
+        type: "error",
+        title: "Profile required",
+        text: "Load your business profile first.",
+      });
+      return;
+    }
+
+    setUploadingStoreImage(true);
+    try {
+      const asset = result.assets[0];
+      const formData = new FormData();
+      formData.append("image", {
+        uri: asset.uri,
+        name: asset.fileName || "profile.jpg",
+        type: asset.mimeType || "image/jpeg",
+      } as any);
+
+      const accessToken = token ?? (await getAccessToken());
+      const res = await fetch(`${ENV.API_BASE}/upload/profile-image`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken ?? ""}`,
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        showToast({
+          type: "error",
+          title: "Upload failed",
+          text: "Could not upload the image. Please try again.",
+        });
+        return;
+      }
+
+      const data = (await res.json()) as { url?: string };
+      if (!data?.url) {
+        showToast({
+          type: "error",
+          title: "Upload failed",
+          text: "Invalid response from server. Please try again.",
+        });
+        return;
+      }
+
+      await updateSalonProfile({
+        variables: {
+          input: {
+            profileImageUrl: data.url,
+            businessName: mySalon.name,
+            location: {
+              address: mySalon.address,
+              latitude: mySalon.latitude,
+              longitude: mySalon.longitude,
+            },
+          },
+        },
+      });
+    } catch {
+      showToast({
+        type: "error",
+        title: "Upload failed",
+        text: "Could not update profile. Please try again.",
+      });
+    } finally {
+      setUploadingStoreImage(false);
+    }
   };
 
   const handleEditBusinessProfile = () => {
@@ -471,7 +644,24 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    console.log("Log out");
+    setShowLogoutModal(true);
+  };
+
+  const handleCancelLogout = () => {
+    setShowLogoutModal(false);
+  };
+
+  const handleConfirmLogout = async () => {
+    try {
+      await logout();
+      setShowLogoutModal(false);
+      router.replace("/onboarding");
+    } catch {
+      showToast({
+        type: "error",
+        text: "Failed to log out. Please try again.",
+      });
+    }
   };
 
   return (
@@ -489,25 +679,37 @@ export default function ProfileScreen() {
         contentContainerStyle={{
           flexGrow: 1,
         }}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         <ContentWrapper>
           {/* Profile Header */}
           <ProfileHeader>
             <ProfileImageContainer isDark={isDark}>
-              <ProfileImage
-                source={{
-                  uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuAQRJHc4GcmbLFYfvyi3USA0lTNDQkVwvrxCYiAVTwmlJy2bRlUXE6szkicgD2VuN9SiTzBwmyDhwxQwuXChIVMMr1mkMwWZfnPcpHMu35PFn61FMuQ1pHDPubCrnkph8osUSJLqVCQEUFBcE97OGCztWyKWrVybDTxs0knW7P0d4XhofW4Y0PmJovTKYR0rtVpD7sCLzzTfQ5EtlxS5xOiERCHC6YrTP6Qz-OzD4XprcEjhDlBM9Rx_pP_GpgI5JSkpWtZIHK9tzDF",
-                }}
-              />
+              {mySalon?.imageUrl ? (
+                <ProfileImage source={{ uri: mySalon.imageUrl }} />
+              ) : (
+                <ProfileImagePlaceholder isDark={isDark}>
+                  <MaterialIcons
+                    name="storefront"
+                    size={48}
+                    color={
+                      isDark
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
+                    }
+                  />
+                </ProfileImagePlaceholder>
+              )}
               <EditButtonOverlay
                 isDark={isDark}
-                onPress={handleEditProfile}
-                android_ripple={{
-                  color: "rgba(255, 255, 255, 0.2)",
-                  borderless: false,
-                  radius: 16,
-                }}>
-                <MaterialIcons name="edit" size={16} color="#ffffff" />
+                onPress={handlePickAndUploadStoreImage}
+                disabled={uploadingStoreImage}
+              >
+                {uploadingStoreImage ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <MaterialIcons name="edit" size={16} color="#ffffff" />
+                )}
               </EditButtonOverlay>
             </ProfileImageContainer>
             <ProfileInfo>
@@ -517,12 +719,18 @@ export default function ProfileScreen() {
                   name="verified"
                   size={20}
                   color={PRIMARY_COLOR}
-                  style={{ fontVariationSettings: "'FILL' 1" }}
+                  style={
+                    {
+                      fontVariationSettings: "'FILL' 1",
+                    } as React.ComponentProps<typeof MaterialIcons>["style"]
+                  }
                 />
               </BusinessNameRow>
               <LocationText isDark={isDark}>Lagos, Nigeria</LocationText>
               <VerifiedBadge isDark={isDark}>
-                <VerifiedBadgeText isDark={isDark}>Verified Stylist</VerifiedBadgeText>
+                <VerifiedBadgeText isDark={isDark}>
+                  Verified Stylist
+                </VerifiedBadgeText>
               </VerifiedBadge>
             </ProfileInfo>
           </ProfileHeader>
@@ -531,10 +739,16 @@ export default function ProfileScreen() {
           <AvailabilityCard isDark={isDark}>
             <AvailabilityLeft>
               <AvailabilityIconContainer isDark={isDark}>
-                <MaterialIcons name="event-available" size={20} color={isDark ? "#86efac" : "#166534"} />
+                <MaterialIcons
+                  name="event-available"
+                  size={20}
+                  color={isDark ? "#86efac" : "#166534"}
+                />
               </AvailabilityIconContainer>
               <AvailabilityText>
-                <AvailabilityTitle isDark={isDark}>Accepting Bookings</AvailabilityTitle>
+                <AvailabilityTitle isDark={isDark}>
+                  Accepting Bookings
+                </AvailabilityTitle>
                 <AvailabilitySubtitle isDark={isDark}>
                   Turn off to pause new orders.
                 </AvailabilitySubtitle>
@@ -555,18 +769,27 @@ export default function ProfileScreen() {
                 isDark={isDark}
                 onPress={handleEditBusinessProfile}
                 android_ripple={{
-                  color: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)",
                   borderless: false,
-                }}>
+                }}
+              >
                 <ListItemIconContainer isDark={isDark}>
                   <MaterialIcons
                     name="storefront"
                     size={20}
-                    color={isDark ? Colors.dark.textSecondary : Colors.light.textSecondary}
+                    color={
+                      isDark
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
+                    }
                   />
                 </ListItemIconContainer>
                 <ListItemContent>
-                  <ListItemTitle isDark={isDark}>Edit Business Profile</ListItemTitle>
+                  <ListItemTitle isDark={isDark}>
+                    Edit Business Profile
+                  </ListItemTitle>
                   <ListItemSubtitle isDark={isDark}>
                     Name, photos, description
                   </ListItemSubtitle>
@@ -574,31 +797,50 @@ export default function ProfileScreen() {
                 <MaterialIcons
                   name="chevron-right"
                   size={24}
-                  color={isDark ? Colors.dark.textTertiary : Colors.light.textTertiary}
+                  color={
+                    isDark
+                      ? Colors.dark.textTertiary
+                      : Colors.light.textTertiary
+                  }
                 />
               </ListItem>
               <ListItem
                 isDark={isDark}
                 onPress={handleServicesPrices}
                 android_ripple={{
-                  color: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)",
                   borderless: false,
-                }}>
+                }}
+              >
                 <ListItemIconContainer isDark={isDark}>
                   <MaterialIcons
                     name="content-cut"
                     size={20}
-                    color={isDark ? Colors.dark.textSecondary : Colors.light.textSecondary}
+                    color={
+                      isDark
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
+                    }
                   />
                 </ListItemIconContainer>
                 <ListItemContent>
-                  <ListItemTitle isDark={isDark}>Services & Prices</ListItemTitle>
-                  <ListItemSubtitle isDark={isDark}>Manage menu items</ListItemSubtitle>
+                  <ListItemTitle isDark={isDark}>
+                    Services & Prices
+                  </ListItemTitle>
+                  <ListItemSubtitle isDark={isDark}>
+                    Manage menu items
+                  </ListItemSubtitle>
                 </ListItemContent>
                 <MaterialIcons
                   name="chevron-right"
                   size={24}
-                  color={isDark ? Colors.dark.textTertiary : Colors.light.textTertiary}
+                  color={
+                    isDark
+                      ? Colors.dark.textTertiary
+                      : Colors.light.textTertiary
+                  }
                 />
               </ListItem>
               <ListItem
@@ -606,24 +848,39 @@ export default function ProfileScreen() {
                 isLast
                 onPress={handleLocationSettings}
                 android_ripple={{
-                  color: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)",
                   borderless: false,
-                }}>
+                }}
+              >
                 <ListItemIconContainer isDark={isDark}>
                   <MaterialIcons
                     name="location-on"
                     size={20}
-                    color={isDark ? Colors.dark.textSecondary : Colors.light.textSecondary}
+                    color={
+                      isDark
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
+                    }
                   />
                 </ListItemIconContainer>
                 <ListItemContent>
-                  <ListItemTitle isDark={isDark}>Location Settings</ListItemTitle>
-                  <ListItemSubtitle isDark={isDark}>Lekki Phase 1, Lagos</ListItemSubtitle>
+                  <ListItemTitle isDark={isDark}>
+                    Location Settings
+                  </ListItemTitle>
+                  <ListItemSubtitle isDark={isDark}>
+                    Lekki Phase 1, Lagos
+                  </ListItemSubtitle>
                 </ListItemContent>
                 <MaterialIcons
                   name="chevron-right"
                   size={24}
-                  color={isDark ? Colors.dark.textTertiary : Colors.light.textTertiary}
+                  color={
+                    isDark
+                      ? Colors.dark.textTertiary
+                      : Colors.light.textTertiary
+                  }
                 />
               </ListItem>
             </SectionCard>
@@ -637,24 +894,37 @@ export default function ProfileScreen() {
                 isDark={isDark}
                 onPress={handlePayoutMethods}
                 android_ripple={{
-                  color: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)",
                   borderless: false,
-                }}>
+                }}
+              >
                 <ListItemIconContainer isDark={isDark}>
                   <MaterialIcons
                     name="account-balance-wallet"
                     size={20}
-                    color={isDark ? Colors.dark.textSecondary : Colors.light.textSecondary}
+                    color={
+                      isDark
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
+                    }
                   />
                 </ListItemIconContainer>
                 <ListItemContent>
                   <ListItemTitle isDark={isDark}>Payout Methods</ListItemTitle>
-                  <ListItemSubtitle isDark={isDark}>Manage bank accounts</ListItemSubtitle>
+                  <ListItemSubtitle isDark={isDark}>
+                    Manage bank accounts
+                  </ListItemSubtitle>
                 </ListItemContent>
                 <MaterialIcons
                   name="chevron-right"
                   size={24}
-                  color={isDark ? Colors.dark.textTertiary : Colors.light.textTertiary}
+                  color={
+                    isDark
+                      ? Colors.dark.textTertiary
+                      : Colors.light.textTertiary
+                  }
                 />
               </ListItem>
               <ListItem
@@ -662,23 +932,36 @@ export default function ProfileScreen() {
                 isLast
                 onPress={handleTransactionHistory}
                 android_ripple={{
-                  color: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)",
                   borderless: false,
-                }}>
+                }}
+              >
                 <ListItemIconContainer isDark={isDark}>
                   <MaterialIcons
                     name="receipt-long"
                     size={20}
-                    color={isDark ? Colors.dark.textSecondary : Colors.light.textSecondary}
+                    color={
+                      isDark
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
+                    }
                   />
                 </ListItemIconContainer>
                 <ListItemContent>
-                  <ListItemTitle isDark={isDark}>Transaction History</ListItemTitle>
+                  <ListItemTitle isDark={isDark}>
+                    Transaction History
+                  </ListItemTitle>
                 </ListItemContent>
                 <MaterialIcons
                   name="chevron-right"
                   size={24}
-                  color={isDark ? Colors.dark.textTertiary : Colors.light.textTertiary}
+                  color={
+                    isDark
+                      ? Colors.dark.textTertiary
+                      : Colors.light.textTertiary
+                  }
                 />
               </ListItem>
             </SectionCard>
@@ -692,14 +975,21 @@ export default function ProfileScreen() {
                 isDark={isDark}
                 onPress={handleNotifications}
                 android_ripple={{
-                  color: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)",
                   borderless: false,
-                }}>
+                }}
+              >
                 <ListItemIconContainer isDark={isDark}>
                   <MaterialIcons
                     name="notifications"
                     size={20}
-                    color={isDark ? Colors.dark.textSecondary : Colors.light.textSecondary}
+                    color={
+                      isDark
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
+                    }
                   />
                 </ListItemIconContainer>
                 <ListItemContent>
@@ -716,14 +1006,21 @@ export default function ProfileScreen() {
                 isLast
                 onPress={handleHelpSupport}
                 android_ripple={{
-                  color: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)",
                   borderless: false,
-                }}>
+                }}
+              >
                 <ListItemIconContainer isDark={isDark}>
                   <MaterialIcons
                     name="help"
                     size={20}
-                    color={isDark ? Colors.dark.textSecondary : Colors.light.textSecondary}
+                    color={
+                      isDark
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
+                    }
                   />
                 </ListItemIconContainer>
                 <ListItemContent>
@@ -732,20 +1029,18 @@ export default function ProfileScreen() {
                 <MaterialIcons
                   name="chevron-right"
                   size={24}
-                  color={isDark ? Colors.dark.textTertiary : Colors.light.textTertiary}
+                  color={
+                    isDark
+                      ? Colors.dark.textTertiary
+                      : Colors.light.textTertiary
+                  }
                 />
               </ListItem>
             </SectionCard>
           </Section>
 
           {/* Log Out Button */}
-          <LogoutButton
-            isDark={isDark}
-            onPress={handleLogout}
-            android_ripple={{
-              color: isDark ? "rgba(239, 68, 68, 0.2)" : "rgba(220, 38, 38, 0.1)",
-              borderless: false,
-            }}>
+          <LogoutButton isDark={isDark} onPress={handleLogout}>
             <MaterialIcons
               name="logout"
               size={20}
@@ -758,6 +1053,49 @@ export default function ProfileScreen() {
           <VersionText isDark={isDark}>Version 2.4.0</VersionText>
         </ContentWrapper>
       </ScrollContent>
+
+      {/* Logout confirmation modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancelLogout}
+      >
+        <ModalOverlay onPress={handleCancelLogout}>
+          <LogoutModalBox isDark={isDark}>
+            <LogoutModalIconCircle>
+              <MaterialIcons name="logout" size={28} color="#ffffff" />
+            </LogoutModalIconCircle>
+            <LogoutModalTitle isDark={isDark}>Logout</LogoutModalTitle>
+            <LogoutModalMessage isDark={isDark}>
+              Are you sure you want to log out of your account?
+            </LogoutModalMessage>
+            <LogoutModalButtons>
+              <LogoutModalConfirmButton
+                onPress={handleConfirmLogout}
+                android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
+              >
+                <LogoutModalConfirmButtonText>
+                  Log Out
+                </LogoutModalConfirmButtonText>
+              </LogoutModalConfirmButton>
+              <LogoutModalCancelButton
+                isDark={isDark}
+                onPress={handleCancelLogout}
+                android_ripple={{
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)",
+                }}
+              >
+                <LogoutModalCancelButtonText isDark={isDark}>
+                  Cancel
+                </LogoutModalCancelButtonText>
+              </LogoutModalCancelButton>
+            </LogoutModalButtons>
+          </LogoutModalBox>
+        </ModalOverlay>
+      </Modal>
     </Container>
   );
 }

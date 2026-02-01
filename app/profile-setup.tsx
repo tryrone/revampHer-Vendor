@@ -1,20 +1,29 @@
-import React, { useState } from "react";
-import { Pressable, TextInput, ScrollView, View } from "react-native";
-import { useRouter } from "expo-router";
-import { MaterialIcons } from "@expo/vector-icons";
-import { Image } from "expo-image";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import styled from "styled-components/native";
+import type { SalonLocation } from "@/components/LocationSelector";
+import { LocationSelector } from "@/components/LocationSelector";
 import {
   BorderRadius,
   Colors,
   FontSizes,
   FontWeights,
-  LineHeights,
   PRIMARY_COLOR,
   Spacing,
 } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  useCompleteSalonOnboardingMutation,
+  useMySalonQuery,
+} from "@/types/gqlReactTypings.generated";
+import { formatGqlError } from "@/utils";
+import { showToast } from "@/utils/toast";
+import { MaterialIcons } from "@expo/vector-icons";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Keyboard } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import styled from "styled-components/native";
 
 // Styled Components
 const Container = styled.View<{ isDark: boolean }>`
@@ -85,7 +94,9 @@ const AvatarPlaceholder = styled.View<{ isDark: boolean }>`
   height: 128px;
   border-radius: 64px;
   background-color: ${(props) =>
-    props.isDark ? Colors.dark.backgroundTertiary : Colors.light.backgroundTertiary};
+    props.isDark
+      ? Colors.dark.backgroundTertiary
+      : Colors.light.backgroundTertiary};
   align-items: center;
   justify-content: center;
 `;
@@ -150,15 +161,19 @@ const InputContainer = styled.View<{ isFocused: boolean; isDark: boolean }>`
     props.isFocused
       ? PRIMARY_COLOR
       : props.isDark
-        ? Colors.dark.borderInput
-        : Colors.light.borderInput};
+      ? Colors.dark.borderInput
+      : Colors.light.borderInput};
 `;
 
-const StyledTextInput = styled.TextInput<{ isDark: boolean; hasRightIcon: boolean }>`
+const StyledTextInput = styled.TextInput<{
+  isDark: boolean;
+  hasRightIcon: boolean;
+}>`
   flex: 1;
   height: 56px;
   padding-left: ${Spacing.md}px;
-  padding-right: ${(props) => (props.hasRightIcon ? "48px" : Spacing.md + "px")};
+  padding-right: ${(props) =>
+    props.hasRightIcon ? "48px" : Spacing.md + "px"};
   font-size: ${FontSizes.base}px;
   color: ${(props) => (props.isDark ? Colors.dark.text : Colors.light.text)};
 `;
@@ -170,128 +185,6 @@ const InputIcon = styled.View`
   transform: translateY(-12px);
 `;
 
-const ServicesSection = styled.View`
-  gap: ${Spacing.md}px;
-`;
-
-const ServicesHeader = styled.View`
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 ${Spacing.xs}px;
-`;
-
-const EditLink = styled.Pressable``;
-
-const EditLinkText = styled.Text`
-  font-size: ${FontSizes.sm}px;
-  font-weight: ${FontWeights.bold};
-  color: ${PRIMARY_COLOR};
-`;
-
-const ServicesContainer = styled.View`
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: ${Spacing.sm}px;
-`;
-
-const ServiceTag = styled.View<{ isDark: boolean }>`
-  flex-direction: row;
-  align-items: center;
-  gap: ${Spacing.sm}px;
-  padding: ${Spacing.sm}px ${Spacing.md}px;
-  border-radius: ${BorderRadius.md}px;
-  background-color: ${(props) =>
-    props.isDark ? Colors.dark.backgroundTertiary : Colors.light.background};
-  border-width: 1px;
-  border-color: ${(props) =>
-    props.isDark ? Colors.dark.borderInput : Colors.light.borderInput};
-`;
-
-const ServiceTagText = styled.Text<{ isDark: boolean }>`
-  font-size: ${FontSizes.sm}px;
-  font-weight: ${FontWeights.medium};
-  color: ${(props) =>
-    props.isDark ? Colors.dark.textSecondary : Colors.light.textSecondary};
-`;
-
-const RemoveServiceButton = styled.Pressable`
-  width: 20px;
-  height: 20px;
-  border-radius: 10px;
-  align-items: center;
-  justify-content: center;
-`;
-
-const AddServiceButton = styled.Pressable<{ isDark: boolean }>`
-  flex-direction: row;
-  align-items: center;
-  gap: ${Spacing.xs}px;
-  padding: ${Spacing.sm}px ${Spacing.md}px;
-  border-radius: ${BorderRadius.md}px;
-  border-width: 1px;
-  border-style: dashed;
-  border-color: ${PRIMARY_COLOR}80;
-  background-color: ${PRIMARY_COLOR}0D;
-`;
-
-const AddServiceText = styled.Text`
-  font-size: ${FontSizes.sm}px;
-  font-weight: ${FontWeights.semibold};
-  color: ${PRIMARY_COLOR};
-`;
-
-const PriceRangeSection = styled.View`
-  gap: ${Spacing.md}px;
-  padding-top: ${Spacing.sm}px;
-`;
-
-const PriceRangeContainer = styled.View`
-  flex-direction: row;
-  gap: ${Spacing.md}px;
-`;
-
-const PriceRangeButton = styled.Pressable<{ isSelected: boolean; isDark: boolean }>`
-  flex: 1;
-  height: 48px;
-  border-radius: ${BorderRadius.xl}px;
-  border-width: 1px;
-  border-color: ${(props) =>
-    props.isSelected
-      ? PRIMARY_COLOR
-      : props.isDark
-        ? Colors.dark.borderInput
-        : Colors.light.borderInput};
-  background-color: ${(props) =>
-    props.isSelected
-      ? props.isDark
-        ? PRIMARY_COLOR + "33"
-        : PRIMARY_COLOR + "0D"
-      : props.isDark
-        ? Colors.dark.backgroundTertiary
-        : Colors.light.background};
-  align-items: center;
-  justify-content: center;
-`;
-
-const PriceRangeText = styled.Text<{ isSelected: boolean; isDark: boolean }>`
-  font-size: ${FontSizes.base}px;
-  font-weight: ${FontWeights.bold};
-  color: ${(props) =>
-    props.isSelected
-      ? PRIMARY_COLOR
-      : props.isDark
-        ? Colors.dark.textSecondary
-        : Colors.light.textSecondary};
-`;
-
-const HelperText = styled.Text<{ isDark: boolean }>`
-  font-size: ${FontSizes.xs}px;
-  color: ${(props) =>
-    props.isDark ? Colors.dark.textTertiary : Colors.light.textTertiary};
-  margin-left: ${Spacing.xs}px;
-`;
-
 const Footer = styled.View<{ paddingBottom: number; isDark: boolean }>`
   position: absolute;
   bottom: 0;
@@ -300,13 +193,15 @@ const Footer = styled.View<{ paddingBottom: number; isDark: boolean }>`
   padding: ${Spacing.md}px;
   padding-bottom: ${(props) => props.paddingBottom}px;
   background-color: ${(props) =>
-    props.isDark ? Colors.dark.backgroundTertiary + "CC" : Colors.light.background + "CC"};
+    props.isDark
+      ? Colors.dark.backgroundTertiary + "CC"
+      : Colors.light.background + "CC"};
   border-top-width: 1px;
   border-top-color: ${(props) =>
     props.isDark ? Colors.dark.border : Colors.light.border};
 `;
 
-const SaveButton = styled.Pressable<{ isDark: boolean }>`
+const SaveButton = styled.Pressable<{ isDark: boolean; disabled?: boolean }>`
   width: 100%;
   height: 56px;
   background-color: ${PRIMARY_COLOR};
@@ -320,6 +215,7 @@ const SaveButton = styled.Pressable<{ isDark: boolean }>`
   shadow-opacity: 0.3;
   shadow-radius: 12px;
   elevation: 6;
+  opacity: ${(props) => (props.disabled ? 0.7 : 1)};
 `;
 
 const SaveButtonText = styled.Text`
@@ -334,41 +230,113 @@ export default function ProfileSetupScreen() {
   const insets = useSafeAreaInsets();
   const isDark = colorScheme === "dark";
 
+  const { data: mySalonData } = useMySalonQuery();
+  const mySalon = mySalonData?.mySalon;
+  const hasInitializedFromMySalon = useRef(false);
+  const locationSheetRef = useRef<BottomSheetModal>(null);
+
+  const [completeSalonOnboardingMutation, { loading }] =
+    useCompleteSalonOnboardingMutation({
+      onCompleted: (data) => {
+        console.log("data", data);
+        showToast({ type: "success", text: "Profile saved successfully." });
+        router.replace("/availability-toggle");
+      },
+      onError: (error) => {
+        showToast({
+          type: "error",
+          text: formatGqlError(error) ?? "Something went wrong",
+        });
+      },
+    });
+
   const [businessName, setBusinessName] = useState("");
   const [location, setLocation] = useState("");
-  const [services, setServices] = useState<string[]>(["Box Braids", "Cornrows"]);
-  const [priceRange, setPriceRange] = useState<"low" | "mid" | "high">("low");
+  const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
+  const [locationLongitude, setLocationLongitude] = useState<number | null>(
+    null
+  );
+
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [localPickedImageUri, setLocalPickedImageUri] = useState<string | null>(
+    null
+  );
+
   const [businessNameFocused, setBusinessNameFocused] = useState(false);
   const [locationFocused, setLocationFocused] = useState(false);
+
+  useEffect(() => {
+    if (mySalon && !hasInitializedFromMySalon.current) {
+      hasInitializedFromMySalon.current = true;
+      setBusinessName(mySalon.name ?? "");
+      setLocation(mySalon.address ?? "");
+      setLocationLatitude(mySalon.latitude ?? null);
+      setLocationLongitude(mySalon.longitude ?? null);
+      if (mySalon.imageUrl) {
+        setProfileImage(mySalon.imageUrl);
+      }
+      setLocalPickedImageUri(null);
+    }
+  }, [mySalon]);
 
   const handleBack = () => {
     router.back();
   };
 
-  const handleCameraPress = () => {
-    // Placeholder for image picker
-    console.log("Open image picker");
+  const handleCameraPress = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      showToast({
+        type: "error",
+        text: "Permission to access photos is required to change your profile image.",
+      });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+      setProfileImage(uri);
+      setLocalPickedImageUri(uri);
+    }
   };
 
-  const handleRemoveService = (serviceToRemove: string) => {
-    setServices(services.filter((service) => service !== serviceToRemove));
+  const handleSaveProfile = async () => {
+    const trimmedName = businessName.trim();
+    const trimmedLocation = location.trim();
+    if (!trimmedName) {
+      showToast({ type: "error", text: "Please enter your business name." });
+      return;
+    }
+    if (!trimmedLocation) {
+      showToast({ type: "error", text: "Please enter your location." });
+      return;
+    }
+    const latitude = locationLatitude ?? mySalon?.latitude ?? 0;
+    const longitude = locationLongitude ?? mySalon?.longitude ?? 0;
+    const displayImageUri = localPickedImageUri ?? profileImage;
+    const input = {
+      businessName: trimmedName,
+      location: {
+        address: trimmedLocation,
+        latitude,
+        longitude,
+      },
+      ...(displayImageUri &&
+      (displayImageUri.startsWith("http") ||
+        displayImageUri.startsWith("https"))
+        ? { profileImageUrl: displayImageUri }
+        : {}),
+    };
+
+    await completeSalonOnboardingMutation({ variables: { input } });
   };
 
-  const handleAddService = () => {
-    // Placeholder for add service
-    console.log("Add service");
-  };
-
-  const handleEditServices = () => {
-    // Placeholder for edit services
-    console.log("Edit services");
-  };
-
-  const handleSaveProfile = () => {
-    // Navigate to availability toggle after saving profile
-    router.replace("/availability-toggle");
-  };
+  const displayImageUri = localPickedImageUri ?? profileImage;
 
   return (
     <Container isDark={isDark}>
@@ -377,15 +345,19 @@ export default function ProfileSetupScreen() {
         contentContainerStyle={{
           paddingBottom: 100, // Space for sticky footer
         }}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Header */}
         <Header paddingTop={insets.top + Spacing.sm} isDark={isDark}>
           <BackButton
             isDark={isDark}
             onPress={handleBack}
             android_ripple={{
-              color: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.05)",
-            }}>
+              color: isDark
+                ? "rgba(255, 255, 255, 0.1)"
+                : "rgba(0, 0, 0, 0.05)",
+            }}
+          >
             <MaterialIcons
               name="arrow-back"
               size={24}
@@ -401,20 +373,28 @@ export default function ProfileSetupScreen() {
           {/* Profile Picture Section */}
           <ProfileSection>
             <AvatarContainer>
-              {profileImage ? (
-                <Avatar source={{ uri: profileImage }} />
+              {displayImageUri ? (
+                <Avatar
+                  key={displayImageUri ?? "avatar-placeholder"}
+                  source={{ uri: displayImageUri }}
+                />
               ) : (
                 <AvatarPlaceholder isDark={isDark}>
                   <MaterialIcons
                     name="person"
                     size={64}
-                    color={isDark ? Colors.dark.textSecondary : Colors.light.textSecondary}
+                    color={
+                      isDark
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
+                    }
                   />
                 </AvatarPlaceholder>
               )}
               <CameraButton
                 onPress={handleCameraPress}
-                android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}>
+                android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
+              >
                 <MaterialIcons name="photo-camera" size={20} color="#ffffff" />
               </CameraButton>
             </AvatarContainer>
@@ -429,15 +409,15 @@ export default function ProfileSetupScreen() {
             {/* Business Name */}
             <InputGroup>
               <Label isDark={isDark}>Business Name</Label>
-              <InputContainer
-                isFocused={businessNameFocused}
-                isDark={isDark}>
+              <InputContainer isFocused={businessNameFocused} isDark={isDark}>
                 <StyledTextInput
                   isDark={isDark}
                   hasRightIcon={false}
                   placeholder="e.g., Grace's Braid Shop"
                   placeholderTextColor={
-                    isDark ? Colors.dark.textTertiary : Colors.light.textTertiary
+                    isDark
+                      ? Colors.dark.textTertiary
+                      : Colors.light.textTertiary
                   }
                   value={businessName}
                   onChangeText={setBusinessName}
@@ -457,11 +437,17 @@ export default function ProfileSetupScreen() {
                   hasRightIcon={true}
                   placeholder="Lagos, Nigeria"
                   placeholderTextColor={
-                    isDark ? Colors.dark.textTertiary : Colors.light.textTertiary
+                    isDark
+                      ? Colors.dark.textTertiary
+                      : Colors.light.textTertiary
                   }
                   value={location}
                   onChangeText={setLocation}
-                  onFocus={() => setLocationFocused(true)}
+                  onFocus={() => {
+                    setLocationFocused(true);
+                    Keyboard.dismiss();
+                    locationSheetRef.current?.present();
+                  }}
                   onBlur={() => setLocationFocused(false)}
                   autoCapitalize="words"
                 />
@@ -473,101 +459,13 @@ export default function ProfileSetupScreen() {
                       locationFocused
                         ? PRIMARY_COLOR
                         : isDark
-                          ? Colors.dark.textSecondary
-                          : Colors.light.textSecondary
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
                     }
                   />
                 </InputIcon>
               </InputContainer>
             </InputGroup>
-
-            {/* Services Offered */}
-            <ServicesSection>
-              <ServicesHeader>
-                <Label isDark={isDark}>Services Offered</Label>
-                <EditLink onPress={handleEditServices}>
-                  <EditLinkText>Edit</EditLinkText>
-                </EditLink>
-              </ServicesHeader>
-              <ServicesContainer>
-                {services.map((service, index) => (
-                  <ServiceTag key={index} isDark={isDark}>
-                    <ServiceTagText isDark={isDark}>{service}</ServiceTagText>
-                    <RemoveServiceButton
-                      onPress={() => handleRemoveService(service)}
-                      android_ripple={{
-                        color: isDark
-                          ? "rgba(255, 255, 255, 0.1)"
-                          : "rgba(0, 0, 0, 0.05)",
-                      }}>
-                      <MaterialIcons
-                        name="close"
-                        size={16}
-                        color={isDark ? Colors.dark.textTertiary : Colors.light.textTertiary}
-                      />
-                    </RemoveServiceButton>
-                  </ServiceTag>
-                ))}
-                <AddServiceButton
-                  isDark={isDark}
-                  onPress={handleAddService}
-                  android_ripple={{
-                    color: PRIMARY_COLOR + "20",
-                  }}>
-                  <MaterialIcons name="add" size={18} color={PRIMARY_COLOR} />
-                  <AddServiceText>Add Service</AddServiceText>
-                </AddServiceButton>
-              </ServicesContainer>
-            </ServicesSection>
-
-            {/* Price Range */}
-            <PriceRangeSection>
-              <Label isDark={isDark}>Price Range</Label>
-              <PriceRangeContainer>
-                <PriceRangeButton
-                  isSelected={priceRange === "low"}
-                  isDark={isDark}
-                  onPress={() => setPriceRange("low")}
-                  android_ripple={{
-                    color: isDark
-                      ? "rgba(255, 255, 255, 0.1)"
-                      : "rgba(0, 0, 0, 0.05)",
-                  }}>
-                  <PriceRangeText isSelected={priceRange === "low"} isDark={isDark}>
-                    ₦
-                  </PriceRangeText>
-                </PriceRangeButton>
-                <PriceRangeButton
-                  isSelected={priceRange === "mid"}
-                  isDark={isDark}
-                  onPress={() => setPriceRange("mid")}
-                  android_ripple={{
-                    color: isDark
-                      ? "rgba(255, 255, 255, 0.1)"
-                      : "rgba(0, 0, 0, 0.05)",
-                  }}>
-                  <PriceRangeText isSelected={priceRange === "mid"} isDark={isDark}>
-                    ₦₦
-                  </PriceRangeText>
-                </PriceRangeButton>
-                <PriceRangeButton
-                  isSelected={priceRange === "high"}
-                  isDark={isDark}
-                  onPress={() => setPriceRange("high")}
-                  android_ripple={{
-                    color: isDark
-                      ? "rgba(255, 255, 255, 0.1)"
-                      : "rgba(0, 0, 0, 0.05)",
-                  }}>
-                  <PriceRangeText isSelected={priceRange === "high"} isDark={isDark}>
-                    ₦₦₦
-                  </PriceRangeText>
-                </PriceRangeButton>
-              </PriceRangeContainer>
-              <HelperText isDark={isDark}>
-                Indicates average cost of service.
-              </HelperText>
-            </PriceRangeSection>
           </FormSection>
         </Content>
       </ScrollContent>
@@ -576,13 +474,31 @@ export default function ProfileSetupScreen() {
       <Footer paddingBottom={insets.bottom + Spacing.md} isDark={isDark}>
         <SaveButton
           isDark={isDark}
+          disabled={loading}
           onPress={handleSaveProfile}
-          android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}>
-          <SaveButtonText>Save Profile</SaveButtonText>
-          <MaterialIcons name="check" size={20} color="#ffffff" />
+          android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
+        >
+          {loading ? (
+            <ActivityIndicator color="#ffffff" size="small" />
+          ) : (
+            <>
+              <SaveButtonText>Save Profile</SaveButtonText>
+              <MaterialIcons name="check" size={20} color="#ffffff" />
+            </>
+          )}
         </SaveButton>
       </Footer>
+
+      <LocationSelector
+        ref={locationSheetRef}
+        onClose={() => setLocationFocused(false)}
+        onSelect={(loc: SalonLocation) => {
+          setLocation(loc.address);
+          setLocationLatitude(loc.latitude);
+          setLocationLongitude(loc.longitude);
+        }}
+        selectedAddress={location}
+      />
     </Container>
   );
 }
-

@@ -25,10 +25,25 @@ type AuthPayload {
   user: User!
 }
 
+type SendEmailOtpPayload {
+  success: Boolean!
+}
+
+type VerifyEmailPayload {
+  success: Boolean!
+}
+
+input VerifyEmailInput {
+  email: String!
+  otp: String!
+}
+
 extend type Mutation {
   loginWithOAuth(input: OAuthInput!): AuthPayload!
   registerWithEmail(input: RegisterWithEmailInput!): AuthPayload!
   loginWithEmail(input: LoginWithEmailInput!): AuthPayload!
+  sendEmailVerificationOtp(email: String!): SendEmailOtpPayload!
+  verifyEmail(input: VerifyEmailInput!): VerifyEmailPayload!
 }
 
 mutation LoginWithOAuth($input: OAuthInput!) {
@@ -44,6 +59,9 @@ mutation LoginWithOAuth($input: OAuthInput!) {
       providerId
       createdAt
       updatedAt
+      emailVerified
+      notificationsEnabled
+      profileSetupComplete
     }
   }
 }
@@ -61,6 +79,9 @@ mutation RegisterWithEmail($input: RegisterWithEmailInput!) {
       providerId
       createdAt
       updatedAt
+      emailVerified
+      notificationsEnabled
+      profileSetupComplete
     }
   }
 }
@@ -78,6 +99,21 @@ mutation LoginWithEmail($input: LoginWithEmailInput!) {
       providerId
       createdAt
       updatedAt
+      emailVerified
+      notificationsEnabled
+      profileSetupComplete
     }
+  }
+}
+
+mutation SendEmailVerificationOtp($email: String!) {
+  sendEmailVerificationOtp(email: $email) {
+    success
+  }
+}
+
+mutation VerifyEmail($input: VerifyEmailInput!) {
+  verifyEmail(input: $input) {
+    success
   }
 }

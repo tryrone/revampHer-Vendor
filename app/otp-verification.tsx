@@ -8,6 +8,12 @@ import {
   Spacing,
 } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  useSendEmailVerificationOtpMutation,
+  useVerifyEmailMutation,
+} from "@/types/gqlReactTypings.generated";
+import { formatGqlError } from "@/utils";
+import { showToast } from "@/utils/toast";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { forwardRef, useEffect, useRef, useState } from "react";
@@ -73,7 +79,7 @@ const Description = styled.Text<{ isDark: boolean }>`
     props.isDark ? Colors.dark.textSecondary : Colors.light.textSecondary};
 `;
 
-const PhoneNumber = styled.Text<{ isDark: boolean }>`
+const EmailText = styled.Text<{ isDark: boolean }>`
   font-weight: ${FontWeights.bold};
   color: ${(props) => (props.isDark ? Colors.dark.text : Colors.light.text)};
 `;
@@ -199,8 +205,12 @@ export default function OTPVerificationScreen() {
   const insets = useSafeAreaInsets();
   const isDark = colorScheme === "dark";
 
-  // Get phone number from params or use default
-  const phoneNumber = (params.phone as string) || "+234 812 345 6789";
+  // Get email from params (passed from create-account after sendEmailVerificationOtp)
+  const email = (params.email as string) || "";
+
+  const [verifyEmail, { loading: verifyLoading }] = useVerifyEmailMutation();
+  const [sendEmailVerificationOtp, { loading: resendLoading }] =
+    useSendEmailVerificationOtpMutation();
 
   // OTP state
   const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
@@ -272,25 +282,69 @@ export default function OTPVerificationScreen() {
   // Handle verify
   const handleVerify = () => {
     const code = otp.join("");
-    if (code.length === 6) {
-      // Navigate to profile setup after verification
-      router.replace("/profile-setup");
+    if (code.length !== 6) return;
+    if (!email) {
+      showToast({
+        title: "Email missing",
+        text: "Please go back and enter your email.",
+        type: "error",
+      });
+      return;
     }
+    verifyEmail({
+      variables: { input: { email, otp: code } },
+      onCompleted: (data) => {
+        if (data.verifyEmail.success) {
+          router.replace("/profile-setup");
+        } else {
+          showToast({
+            title: "Verification failed",
+            text: "Invalid or expired code.",
+            type: "error",
+          });
+        }
+      },
+      onError: (error) => {
+        showToast({
+          title: "Verification failed",
+          text: formatGqlError(error) ?? "Invalid or expired code",
+          type: "error",
+        });
+      },
+    });
   };
 
   // Handle resend
   const handleResend = () => {
-    if (canResend) {
-      setTimer(30);
-      setCanResend(false);
-      setOtp(["", "", "", "", "", ""]);
-      inputRefs.current[0]?.focus();
-      setFocusedIndex(0);
-    }
+    if (!canResend || !email) return;
+    sendEmailVerificationOtp({
+      variables: { email },
+      onCompleted: () => {
+        showToast({
+          title: "Code sent",
+          text: "A new verification code was sent to your email.",
+          type: "success",
+        });
+        setTimer(30);
+        setCanResend(false);
+        setOtp(["", "", "", "", "", ""]);
+        inputRefs.current[0]?.focus();
+        setFocusedIndex(0);
+      },
+      onError: (error) => {
+        showToast({
+          title: "Resend failed",
+          text: formatGqlError(error) ?? "Could not send code",
+          type: "error",
+        });
+      },
+    });
   };
 
   // Check if all OTP fields are filled
   const isOtpComplete = otp.every((digit) => digit !== "");
+  const isVerifyDisabled =
+    !isOtpComplete || !email || verifyLoading;
 
   return (
     <Container
@@ -326,8 +380,8 @@ export default function OTPVerificationScreen() {
           <TitleSection>
             <Title isDark={isDark}>Verification Code</Title>
             <Description isDark={isDark}>
-              We've sent a 6-digit code to your phone number{" "}
-              <PhoneNumber isDark={isDark}>{phoneNumber}</PhoneNumber>.
+              We've sent a 6-digit code to your email address{" "}
+              <EmailText isDark={isDark}>{email || "—"}</EmailText>.
             </Description>
           </TitleSection>
 
@@ -362,8 +416,14 @@ export default function OTPVerificationScreen() {
                 <ResendIndicator isDark={isDark} />
               </>
             ) : (
-              <Pressable onPress={handleResend}>
-                <ResendLink>Resend code</ResendLink>
+              <Pressable
+                onPress={handleResend}
+                disabled={resendLoading || !email}
+                style={{ opacity: resendLoading || !email ? 0.6 : 1 }}
+              >
+                <ResendLink>
+                  {resendLoading ? "Sending…" : "Resend code"}
+                </ResendLink>
               </Pressable>
             )}
           </ResendSection>
@@ -372,12 +432,16 @@ export default function OTPVerificationScreen() {
           <ButtonContainer>
             <PrimaryButton
               isDark={isDark}
-              disabled={!isOtpComplete}
+              disabled={isVerifyDisabled}
               onPress={handleVerify}
               android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
             >
-              <PrimaryButtonText>Verify & Proceed</PrimaryButtonText>
-              <MaterialIcons name="arrow-forward" size={20} color="#ffffff" />
+              <PrimaryButtonText>
+                {verifyLoading ? "Verifying…" : "Verify & Proceed"}
+              </PrimaryButtonText>
+              {!verifyLoading && (
+                <MaterialIcons name="arrow-forward" size={20} color="#ffffff" />
+              )}
             </PrimaryButton>
           </ButtonContainer>
         </MainContent>

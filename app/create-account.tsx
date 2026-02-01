@@ -8,10 +8,29 @@ import {
   Spacing,
 } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import useGoogleSignInHook from "@/hooks/useGoogleSignInHook";
+import {
+  getLocalItem,
+  saveLocalUserData,
+  setAccessToken,
+  setLocalItem,
+} from "@/storage";
+import { useAuthStore } from "@/store";
+import {
+  AuthProvider,
+  useLoginWithOAuthMutation,
+  User,
+  useRegisterWithEmailMutation,
+  UserRole,
+  useSendEmailVerificationOtpMutation,
+} from "@/types/gqlReactTypings.generated";
+import { formatGqlError, isIos } from "@/utils";
+import { showToast } from "@/utils/toast";
 import { MaterialIcons } from "@expo/vector-icons";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { Pressable, Text } from "react-native";
+import { useEffect, useState } from "react";
+import { Platform, Pressable, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import styled from "styled-components/native";
@@ -182,7 +201,7 @@ const ActionsContainer = styled.View`
   gap: ${Spacing.lg}px;
 `;
 
-const PrimaryButton = styled.Pressable<{ isDark: boolean }>`
+const PrimaryButton = styled.TouchableOpacity<{ isDark: boolean }>`
   width: 100%;
   height: 56px;
   background-color: ${PRIMARY_COLOR};
@@ -228,7 +247,7 @@ const SocialButtonsContainer = styled.View`
   gap: ${Spacing.lg}px;
 `;
 
-const SocialButton = styled.Pressable<{ isDark: boolean }>`
+const SocialButton = styled.TouchableOpacity<{ isDark: boolean }>`
   flex: 1;
   height: 48px;
   background-color: ${(props) =>
@@ -311,6 +330,8 @@ export default function CreateAccountScreen() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const isDark = colorScheme === "dark";
+  const { setIsLoggedIn, setToken } = useAuthStore();
+  const { googlePromptAsync, user, googleSignInToken } = useGoogleSignInHook();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -327,27 +348,217 @@ export default function CreateAccountScreen() {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
 
+  const [registerWithEmail, { loading: registerLoading }] =
+    useRegisterWithEmailMutation({
+      onCompleted: (data) => {
+        if (data.registerWithEmail.user) {
+          handleAuthSuccess(data.registerWithEmail.token, {
+            ...data.registerWithEmail.user,
+            notificationsEnabled: true,
+          });
+        }
+      },
+      onError: (error) => {
+        showToast({
+          title: "Sign up failed",
+          text: formatGqlError(error) ?? "Something went wrong",
+          type: "error",
+        });
+      },
+    });
+  const [loginWithOAuth, { loading: oauthLoading }] = useLoginWithOAuthMutation(
+    {
+      onCompleted: (data) => {
+        if (data.loginWithOAuth.user) {
+          handleAuthSuccess(data.loginWithOAuth.token, {
+            ...data.loginWithOAuth.user,
+            notificationsEnabled: true,
+          });
+        }
+      },
+      onError: (error) => {
+        showToast({
+          title: "Google sign up failed",
+          text: formatGqlError(error) ?? "Something went wrong",
+          type: "error",
+        });
+      },
+    }
+  );
+
+  const [
+    sendEmailVerificationOtp,
+    { loading: sendEmailVerificationOtpLoading },
+  ] = useSendEmailVerificationOtpMutation({
+    onCompleted: (data) => {
+      if (data.sendEmailVerificationOtp.success) {
+        showToast({
+          title: "Email verification sent",
+          type: "success",
+        });
+        router.replace({
+          pathname: "/otp-verification",
+          params: {
+            email: email.trim(),
+          },
+        });
+      }
+    },
+    onError: (error) => {
+      showToast({
+        title: "Email verification failed",
+        text: formatGqlError(error) ?? "Something went wrong",
+        type: "error",
+      });
+    },
+  });
+
+  const handleAuthSuccess = (token: string, authUser: User) => {
+    setAccessToken(token);
+    saveLocalUserData(authUser);
+    setIsLoggedIn(true);
+    setToken(token);
+
+    sendEmailVerificationOtp({
+      variables: {
+        email: email.trim(),
+      },
+    });
+  };
+
   const handleCreateAccount = () => {
-    // Navigate to OTP verification with phone number
-    router.push({
-      pathname: "/otp-verification",
-      params: { phone: phone || "+234 812 345 6789" },
+    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
+      showToast({
+        title: "Please fill in all fields",
+        type: "error",
+      });
+      return;
+    }
+    if (password !== confirmPassword) {
+      showToast({
+        title: "Passwords do not match",
+        type: "error",
+      });
+      return;
+    }
+    registerWithEmail({
+      variables: {
+        input: {
+          fullName: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim() || undefined,
+          password,
+          role: UserRole.Salon,
+        },
+      },
     });
   };
 
   const handleGoogleSignUp = () => {
-    // Placeholder for Google sign up
-    console.log("Google sign up");
+    googlePromptAsync();
   };
 
-  const handleAppleSignUp = () => {
-    // Placeholder for Apple sign up
-    console.log("Apple sign up");
+  useEffect(() => {
+    if (user && googleSignInToken) {
+      loginWithOAuth({
+        variables: {
+          input: {
+            provider: AuthProvider.Google,
+            providerId: user.id ?? "",
+            email: user.email ?? "",
+            fullName: user.name ?? "Google User",
+            profileImage: user.photo ?? "",
+            role: UserRole.Salon,
+          },
+        },
+      });
+    }
+  }, [user, googleSignInToken]);
+
+  const handleAppleSignUp = async () => {
+    if (Platform.OS !== "ios") {
+      showToast({
+        title: "Apple Sign-In is only available on iOS",
+        type: "error",
+      });
+      return;
+    }
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      const storageKey = `apple_credential_${credential.user}`;
+
+      let storedEmail: string | null = null;
+      let storedFullName: string | null = null;
+      const storedData = await getLocalItem(storageKey);
+      if (storedData) {
+        try {
+          const parsed = JSON.parse(storedData);
+          storedEmail = parsed.email || null;
+          storedFullName = parsed.fullName || null;
+        } catch (e) {
+          console.error("Failed to parse stored Apple credential:", e);
+        }
+      }
+
+      const emailVal = credential.email || storedEmail || "";
+      const fullNameVal = credential.fullName
+        ? `${credential.fullName.givenName || ""} ${
+            credential.fullName.familyName || ""
+          }`.trim()
+        : storedFullName || "";
+
+      if (credential.email || credential.fullName) {
+        await setLocalItem(
+          storageKey,
+          JSON.stringify({
+            email: credential.email || storedEmail || "",
+            fullName: credential.fullName
+              ? `${credential.fullName.givenName || ""} ${
+                  credential.fullName.familyName || ""
+                }`.trim()
+              : storedFullName || "",
+          })
+        );
+      }
+
+      loginWithOAuth({
+        variables: {
+          input: {
+            provider: AuthProvider.Apple,
+            providerId: credential.user,
+            email: emailVal || undefined,
+            fullName: fullNameVal || "Apple User",
+            role: UserRole.Salon,
+          },
+        },
+      });
+    } catch (e: unknown) {
+      const err = e as { code?: string };
+      if (err.code === "ERR_REQUEST_CANCELED") {
+        // User canceled
+      } else {
+        console.error("Apple Sign-In error:", e);
+        showToast({
+          title: "Apple sign up failed",
+          text: err instanceof Error ? err.message : "Something went wrong",
+          type: "error",
+        });
+      }
+    }
   };
 
   const handleLogin = () => {
     router.push("/login");
   };
+
+  const isAnyLoading =
+    registerLoading || oauthLoading || sendEmailVerificationOtpLoading;
 
   return (
     <Container
@@ -582,9 +793,14 @@ export default function CreateAccountScreen() {
             <PrimaryButton
               isDark={isDark}
               onPress={handleCreateAccount}
-              android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
+              disabled={isAnyLoading}
+              style={isAnyLoading ? { opacity: 0.7 } : undefined}
             >
-              <PrimaryButtonText>Create Account</PrimaryButtonText>
+              <PrimaryButtonText>
+                {registerLoading || sendEmailVerificationOtpLoading
+                  ? "Creating…"
+                  : "Create Account"}
+              </PrimaryButtonText>
             </PrimaryButton>
 
             {/* Divider */}
@@ -599,28 +815,24 @@ export default function CreateAccountScreen() {
               <SocialButton
                 isDark={isDark}
                 onPress={handleGoogleSignUp}
-                android_ripple={{
-                  color: isDark
-                    ? "rgba(255, 255, 255, 0.1)"
-                    : "rgba(0, 0, 0, 0.05)",
-                }}
+                disabled={isAnyLoading}
+                style={isAnyLoading ? { opacity: 0.7 } : undefined}
               >
                 <GoogleLogo />
                 <SocialButtonText isDark={isDark}>Google</SocialButtonText>
               </SocialButton>
 
-              <SocialButton
-                isDark={isDark}
-                onPress={handleAppleSignUp}
-                android_ripple={{
-                  color: isDark
-                    ? "rgba(255, 255, 255, 0.1)"
-                    : "rgba(0, 0, 0, 0.05)",
-                }}
-              >
-                <AppleLogo isDark={isDark} />
-                <SocialButtonText isDark={isDark}>Apple</SocialButtonText>
-              </SocialButton>
+              {isIos() && (
+                <SocialButton
+                  isDark={isDark}
+                  onPress={handleAppleSignUp}
+                  disabled={isAnyLoading}
+                  style={isAnyLoading ? { opacity: 0.7 } : undefined}
+                >
+                  <AppleLogo isDark={isDark} />
+                  <SocialButtonText isDark={isDark}>Apple</SocialButtonText>
+                </SocialButton>
+              )}
             </SocialButtonsContainer>
           </ActionsContainer>
         </FormSection>

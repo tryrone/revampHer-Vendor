@@ -39,6 +39,7 @@ query GetMyProfile {
     authProvider
     providerId
     notificationsEnabled
+    profileSetupComplete
     createdAt
     updatedAt
     defaultAddress {
@@ -75,6 +76,7 @@ mutation UpdateProfile($input: UpdateProfileInput!) {
     authProvider
     providerId
     notificationsEnabled
+    profileSetupComplete
     createdAt
     updatedAt
     defaultAddress {

@@ -1,14 +1,15 @@
 import { useState } from "react";
 
-interface User {
-  id: string | null;
+/** Minimal user shape returned by Google Sign-In (not the full GraphQL User). */
+export interface GoogleSignInUser {
+  id: string;
   name: string | null;
-  email: string | null;
+  email: string;
   photo: string | null;
 }
 
 const useGoogleSignInHook = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<GoogleSignInUser | null>(null);
   const [googleSignInToken, setGoogleSignInToken] = useState<string | null>(
     null
   );
@@ -28,11 +29,11 @@ const useGoogleSignInHook = () => {
       if (isSuccessResponse(response)) {
         const { idToken, user } = response.data;
 
-        const userData = {
+        const userData: GoogleSignInUser = {
           id: user.id,
-          name: user.name,
-          email: user.email,
-          photo: user.photo,
+          name: user.name ?? null,
+          email: user.email ?? "",
+          photo: user.photo ?? null,
         };
         setUser(userData);
         const token = idToken;

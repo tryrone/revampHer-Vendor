@@ -17,6 +17,12 @@ input CompleteSalonOnboardingInput {
   serviceRadiusKm: Int
 }
 
+input UpdateSalonProfileInput {
+  profileImageUrl: String
+  businessName: String!
+  location: SalonLocationInput!
+}
+
 extend type Query {
   salons: [Salon!]!
   salonsNearLocation(input: SalonsNearLocationInput!): [Salon!]!
@@ -25,6 +31,7 @@ extend type Query {
 
 extend type Mutation {
   completeSalonOnboarding(input: CompleteSalonOnboardingInput!): Salon!
+  updateSalonProfile(input: UpdateSalonProfileInput!): Salon!
   setSalonOnline(isOnline: Boolean!): Salon!
 }
 
@@ -79,6 +86,22 @@ query MySalon {
 
 mutation CompleteSalonOnboarding($input: CompleteSalonOnboardingInput!) {
   completeSalonOnboarding(input: $input) {
+    id
+    name
+    address
+    latitude
+    longitude
+    serviceRadiusKm
+    rating
+    isVerified
+    imageUrl
+    isOnline
+    onboardingComplete
+  }
+}
+
+mutation UpdateSalonProfile($input: UpdateSalonProfileInput!) {
+  updateSalonProfile(input: $input) {
     id
     name
     address

@@ -7,6 +7,7 @@ const authLink = (token: string | undefined) =>
   new SetContextLink(async (prevContext, _) => {
     const { headers } = prevContext;
     const accessToken = token ? token : await getAccessToken();
+    console.log("accessToken", accessToken);
 
     return {
       headers: {

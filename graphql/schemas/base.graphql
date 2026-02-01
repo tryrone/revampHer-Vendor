@@ -22,6 +22,8 @@ type User {
   authProvider: AuthProvider!
   providerId: String!
   profileImage: String
+  emailVerified: Boolean!
+  profileSetupComplete: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
