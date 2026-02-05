@@ -43,11 +43,13 @@ export default function RootLayout() {
               iosClientId,
               webClientId: ENV.GOOGLE_WEB_CLIENT_ID ?? undefined,
             });
-          }
+          },
         );
       }
     }
   }, []);
+
+  console.log("token", token);
 
   const client = useMemo(() => createApolloClient(token ?? undefined), [token]);
 

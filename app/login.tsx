@@ -392,7 +392,7 @@ export default function LoginScreen() {
                   credential.fullName.familyName || ""
                 }`.trim()
               : storedFullName || "",
-          })
+          }),
         );
       }
 
@@ -408,10 +408,20 @@ export default function LoginScreen() {
         },
         onCompleted: (data) => {
           if (data.loginWithOAuth.user) {
+            setAccessToken(data.loginWithOAuth.token);
+            saveLocalUserData({
+              ...data.loginWithOAuth.user,
+              notificationsEnabled: true,
+            });
+            setIsLoggedIn(true);
+            setToken(data.loginWithOAuth.token);
+
             if (!data.loginWithOAuth.user.profileSetupComplete) {
               router.replace("/profile-setup");
               return;
             }
+
+            router.replace("/(tabs)");
           }
         },
         onError: (error) => {
@@ -452,10 +462,6 @@ export default function LoginScreen() {
         },
         onCompleted: (data) => {
           if (data.loginWithOAuth.user) {
-            if (!data.loginWithOAuth.user.profileSetupComplete) {
-              router.replace("/profile-setup");
-              return;
-            }
             setAccessToken(data.loginWithOAuth.token);
             saveLocalUserData({
               ...data.loginWithOAuth.user,
@@ -463,6 +469,12 @@ export default function LoginScreen() {
             });
             setIsLoggedIn(true);
             setToken(data.loginWithOAuth.token);
+
+            if (!data.loginWithOAuth.user.profileSetupComplete) {
+              router.replace("/profile-setup");
+              return;
+            }
+
             router.replace("/(tabs)");
           }
         },
@@ -529,8 +541,8 @@ export default function LoginScreen() {
                     emailFocused
                       ? PRIMARY_COLOR
                       : isDark
-                      ? Colors.dark.textSecondary
-                      : Colors.light.textSecondary
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
                   }
                 />
               </InputIcon>
@@ -569,8 +581,8 @@ export default function LoginScreen() {
                     passwordFocused
                       ? PRIMARY_COLOR
                       : isDark
-                      ? Colors.dark.textSecondary
-                      : Colors.light.textSecondary
+                        ? Colors.dark.textSecondary
+                        : Colors.light.textSecondary
                   }
                 />
               </PasswordToggle>
