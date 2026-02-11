@@ -60,6 +60,7 @@ export type CreateRevampOrderInput = {
   pickupAddress: PickupAddressInput;
   requestedReturnDate?: InputMaybe<Scalars['DateTime']>;
   requestedReturnDays?: InputMaybe<Scalars['Int']>;
+  salonId: Scalars['ID'];
 };
 
 export type CreateRevampOrderPayload = {
@@ -91,6 +92,7 @@ export type Mutation = {
   registerWithEmail: AuthPayload;
   sendEmailVerificationOtp: SendEmailOtpPayload;
   setSalonOnline: Salon;
+  updateOrderStatus: UpdateOrderStatusPayload;
   updateProfile: User;
   updateSalonProfile: Salon;
   verifyEmail: VerifyEmailPayload;
@@ -129,6 +131,11 @@ export type MutationSendEmailVerificationOtpArgs = {
 
 export type MutationSetSalonOnlineArgs = {
   isOnline: Scalars['Boolean'];
+};
+
+
+export type MutationUpdateOrderStatusArgs = {
+  input: UpdateOrderStatusInput;
 };
 
 
@@ -207,6 +214,7 @@ export enum OrderItemType {
 }
 
 export enum OrderStatus {
+  AcceptedBySalon = 'ACCEPTED_BY_SALON',
   AtSalon = 'AT_SALON',
   Cancelled = 'CANCELLED',
   Created = 'CREATED',
@@ -251,11 +259,14 @@ export type PickupAddressInput = {
 export type Query = {
   __typename?: 'Query';
   _empty?: Maybe<Scalars['String']>;
+  getMyProfile: User;
   me: User;
   mySalon?: Maybe<Salon>;
   order: Order;
   orderHistory: RecentOrdersConnection;
   recentOrdersInProgress: RecentOrdersConnection;
+  salonCreatedOrders: RecentOrdersConnection;
+  salonOrders: RecentOrdersConnection;
   salons: Array<Salon>;
   salonsNearLocation: Array<Salon>;
   services: Array<Service>;
@@ -274,6 +285,16 @@ export type QueryOrderHistoryArgs = {
 
 export type QueryRecentOrdersInProgressArgs = {
   input?: InputMaybe<RecentOrdersInput>;
+};
+
+
+export type QuerySalonCreatedOrdersArgs = {
+  input?: InputMaybe<SalonOrdersInput>;
+};
+
+
+export type QuerySalonOrdersArgs = {
+  input?: InputMaybe<SalonOrdersInput>;
 };
 
 
@@ -324,6 +345,12 @@ export type SalonLocationInput = {
   longitude: Scalars['Float'];
 };
 
+export type SalonOrdersInput = {
+  cursor?: InputMaybe<Scalars['String']>;
+  limit?: InputMaybe<Scalars['Int']>;
+  salonId?: InputMaybe<Scalars['ID']>;
+};
+
 export type SalonsNearLocationInput = {
   latitude: Scalars['Float'];
   longitude: Scalars['Float'];
@@ -354,6 +381,18 @@ export enum StatusActor {
   Salon = 'SALON',
   System = 'SYSTEM'
 }
+
+export type UpdateOrderStatusInput = {
+  actor: StatusActor;
+  message?: InputMaybe<Scalars['String']>;
+  orderId: Scalars['ID'];
+  status: OrderStatus;
+};
+
+export type UpdateOrderStatusPayload = {
+  __typename?: 'UpdateOrderStatusPayload';
+  order: Order;
+};
 
 export type UpdateProfileInput = {
   defaultAddress?: InputMaybe<OfficeAddressInput>;
@@ -386,6 +425,7 @@ export type User = {
   profileSetupComplete: Scalars['Boolean'];
   providerId: Scalars['String'];
   role: UserRole;
+  salonProfile?: Maybe<Salon>;
   updatedAt: Scalars['DateTime'];
 };
 
@@ -460,12 +500,40 @@ export type OrderHistoryQueryVariables = Exact<{
 
 export type OrderHistoryQuery = { __typename?: 'Query', orderHistory: { __typename?: 'RecentOrdersConnection', hasNextPage: boolean, endCursor?: string | undefined, orders: Array<{ __typename?: 'Order', id: string, customerId: string, salonId?: string | undefined, pickupAddressId: string, status: OrderStatus, totalAmount: number, createdAt: any, updatedAt: any, items: Array<{ __typename?: 'OrderItem', id: string, nameSnapshot: string, priceSnapshot: number, quantity: number, hairType?: string | undefined, hairLength?: string | undefined, notes?: string | undefined, orderItemUrl?: string | undefined, service?: { __typename?: 'Service', id: string, name: string, description?: string | undefined, basePrice: number, estimatedDays: number, category: string, isActive: boolean } | undefined }> }> } };
 
+export type SalonCreatedOrdersQueryVariables = Exact<{
+  input?: InputMaybe<SalonOrdersInput>;
+}>;
+
+
+export type SalonCreatedOrdersQuery = { __typename?: 'Query', salonCreatedOrders: { __typename?: 'RecentOrdersConnection', hasNextPage: boolean, endCursor?: string | undefined, orders: Array<{ __typename?: 'Order', id: string, customerId: string, salonId?: string | undefined, pickupAddressId: string, status: OrderStatus, totalAmount: number, createdAt: any, updatedAt: any, items: Array<{ __typename?: 'OrderItem', id: string, nameSnapshot: string, priceSnapshot: number, quantity: number, hairType?: string | undefined, hairLength?: string | undefined, notes?: string | undefined, orderItemUrl?: string | undefined }>, statusEvents: Array<{ __typename?: 'OrderStatusEvent', id: string, orderId: string, status: OrderStatus, message?: string | undefined, actor: StatusActor, createdAt: any }>, payments: Array<{ __typename?: 'Payment', id: string, orderId: string, customerId: string, provider: string, reference: string, amount: number, status: string }>, customer: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string }, salon?: { __typename?: 'Salon', id: string, name: string, address: string, latitude: number, longitude: number, serviceRadiusKm: number } | undefined, pickupAddress: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean } }> } };
+
+export type SalonOrdersQueryVariables = Exact<{
+  input?: InputMaybe<SalonOrdersInput>;
+}>;
+
+
+export type SalonOrdersQuery = { __typename?: 'Query', salonOrders: { __typename?: 'RecentOrdersConnection', hasNextPage: boolean, endCursor?: string | undefined, orders: Array<{ __typename?: 'Order', id: string, customerId: string, salonId?: string | undefined, pickupAddressId: string, status: OrderStatus, totalAmount: number, createdAt: any, updatedAt: any, pickupAddress: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean }, items: Array<{ __typename?: 'OrderItem', id: string }> }> } };
+
+export type OrderQueryVariables = Exact<{
+  id: Scalars['ID'];
+}>;
+
+
+export type OrderQuery = { __typename?: 'Query', order: { __typename?: 'Order', id: string, customerId: string, salonId?: string | undefined, pickupAddressId: string, status: OrderStatus, totalAmount: number, createdAt: any, updatedAt: any, customer: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, createdAt: any, updatedAt: any }, salon?: { __typename?: 'Salon', id: string, userId: string, name: string, address: string, latitude: number, longitude: number, serviceRadiusKm: number, rating?: number | undefined, isVerified: boolean, imageUrl?: string | undefined, createdAt: any } | undefined, items: Array<{ __typename?: 'OrderItem', id: string, nameSnapshot: string, priceSnapshot: number, quantity: number, hairType?: string | undefined, hairLength?: string | undefined, notes?: string | undefined, orderItemUrl?: string | undefined }>, statusEvents: Array<{ __typename?: 'OrderStatusEvent', id: string, orderId: string, status: OrderStatus, message?: string | undefined, actor: StatusActor, createdAt: any }>, payments: Array<{ __typename?: 'Payment', id: string, orderId: string, customerId: string, provider: string, reference: string, amount: number, status: string, paidAt?: any | undefined, createdAt: any }> } };
+
 export type CreateRevampOrderMutationVariables = Exact<{
   input: CreateRevampOrderInput;
 }>;
 
 
 export type CreateRevampOrderMutation = { __typename?: 'Mutation', createRevampOrder: { __typename?: 'CreateRevampOrderPayload', order: { __typename?: 'Order', id: string, customerId: string, salonId?: string | undefined, pickupAddressId: string, status: OrderStatus, totalAmount: number, createdAt: any, updatedAt: any, customer: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, createdAt: any, updatedAt: any }, items: Array<{ __typename?: 'OrderItem', id: string, nameSnapshot: string, priceSnapshot: number, quantity: number, hairType?: string | undefined, hairLength?: string | undefined, notes?: string | undefined, orderItemUrl?: string | undefined }> } } };
+
+export type UpdateOrderStatusMutationVariables = Exact<{
+  input: UpdateOrderStatusInput;
+}>;
+
+
+export type UpdateOrderStatusMutation = { __typename?: 'Mutation', updateOrderStatus: { __typename?: 'UpdateOrderStatusPayload', order: { __typename?: 'Order', id: string, customerId: string, salonId?: string | undefined, pickupAddressId: string, status: OrderStatus, totalAmount: number, createdAt: any, updatedAt: any, customer: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, createdAt: any, updatedAt: any }, salon?: { __typename?: 'Salon', id: string, userId: string, name: string, address: string, latitude: number, longitude: number, serviceRadiusKm: number, rating?: number | undefined, isVerified: boolean, imageUrl?: string | undefined, createdAt: any } | undefined, pickupAddress: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined }, items: Array<{ __typename?: 'OrderItem', id: string, orderId: string, itemType: OrderItemType, referenceId: string, serviceId?: string | undefined, nameSnapshot: string, priceSnapshot: number, quantity: number, hairType?: string | undefined, hairLength?: string | undefined, notes?: string | undefined, orderItemUrl?: string | undefined, createdAt: any, service?: { __typename?: 'Service', id: string, name: string, description?: string | undefined, basePrice: number, estimatedDays: number, category: string, isActive: boolean, createdAt: any } | undefined }>, statusEvents: Array<{ __typename?: 'OrderStatusEvent', id: string, orderId: string, status: OrderStatus, message?: string | undefined, actor: StatusActor, createdAt: any }>, payments: Array<{ __typename?: 'Payment', id: string, orderId: string, customerId: string, provider: string, reference: string, amount: number, status: string, paidAt?: any | undefined, createdAt: any }> } } };
 
 export type GetOrderQueryVariables = Exact<{
   id: Scalars['ID'];
@@ -515,7 +583,7 @@ export type SetSalonOnlineMutation = { __typename?: 'Mutation', setSalonOnline: 
 export type GetMyProfileQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetMyProfileQuery = { __typename?: 'Query', me: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, phone?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, notificationsEnabled: boolean, profileSetupComplete: boolean, createdAt: any, updatedAt: any, defaultAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined, officeAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined } };
+export type GetMyProfileQuery = { __typename?: 'Query', me: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, phone?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string, notificationsEnabled: boolean, profileSetupComplete: boolean, createdAt: any, updatedAt: any, defaultAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined, officeAddress?: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean, createdAt?: any | undefined } | undefined, salonProfile?: { __typename?: 'Salon', id: string, userId: string, name: string, address: string, latitude: number, longitude: number, serviceRadiusKm: number, rating?: number | undefined, isVerified: boolean, imageUrl?: string | undefined, isOnline: boolean, onboardingComplete: boolean, createdAt: any } | undefined } };
 
 export type UpdateProfileMutationVariables = Exact<{
   input: UpdateProfileInput;
@@ -904,6 +972,261 @@ export function useOrderHistoryLazyQuery(baseOptions?: ApolloReactHooks.LazyQuer
 export type OrderHistoryQueryHookResult = ReturnType<typeof useOrderHistoryQuery>;
 export type OrderHistoryLazyQueryHookResult = ReturnType<typeof useOrderHistoryLazyQuery>;
 export type OrderHistoryQueryResult = Apollo.QueryResult<OrderHistoryQuery, OrderHistoryQueryVariables>;
+export const SalonCreatedOrdersDocument = gql`
+    query SalonCreatedOrders($input: SalonOrdersInput) {
+  salonCreatedOrders(input: $input) {
+    orders {
+      id
+      customerId
+      salonId
+      pickupAddressId
+      status
+      totalAmount
+      createdAt
+      updatedAt
+      items {
+        id
+      }
+      statusEvents {
+        id
+        orderId
+        status
+        message
+        actor
+        createdAt
+      }
+      payments {
+        id
+        orderId
+        customerId
+        provider
+        reference
+        amount
+        status
+      }
+      customer {
+        id
+        fullName
+        email
+        role
+        profileImage
+        authProvider
+        providerId
+      }
+      salon {
+        id
+        name
+        address
+        latitude
+        longitude
+        serviceRadiusKm
+      }
+      pickupAddress {
+        id
+        userId
+        label
+        address
+        latitude
+        longitude
+        isDefault
+      }
+      items {
+        id
+        nameSnapshot
+        priceSnapshot
+        quantity
+        hairType
+        hairLength
+        notes
+        orderItemUrl
+      }
+    }
+    hasNextPage
+    endCursor
+  }
+}
+    `;
+
+/**
+ * __useSalonCreatedOrdersQuery__
+ *
+ * To run a query within a React component, call `useSalonCreatedOrdersQuery` and pass it any options that fit your needs.
+ * When your component renders, `useSalonCreatedOrdersQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSalonCreatedOrdersQuery({
+ *   variables: {
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useSalonCreatedOrdersQuery(baseOptions?: ApolloReactHooks.QueryHookOptions<SalonCreatedOrdersQuery, SalonCreatedOrdersQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return ApolloReactHooks.useQuery<SalonCreatedOrdersQuery, SalonCreatedOrdersQueryVariables>(SalonCreatedOrdersDocument, options);
+      }
+export function useSalonCreatedOrdersLazyQuery(baseOptions?: ApolloReactHooks.LazyQueryHookOptions<SalonCreatedOrdersQuery, SalonCreatedOrdersQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return ApolloReactHooks.useLazyQuery<SalonCreatedOrdersQuery, SalonCreatedOrdersQueryVariables>(SalonCreatedOrdersDocument, options);
+        }
+export type SalonCreatedOrdersQueryHookResult = ReturnType<typeof useSalonCreatedOrdersQuery>;
+export type SalonCreatedOrdersLazyQueryHookResult = ReturnType<typeof useSalonCreatedOrdersLazyQuery>;
+export type SalonCreatedOrdersQueryResult = Apollo.QueryResult<SalonCreatedOrdersQuery, SalonCreatedOrdersQueryVariables>;
+export const SalonOrdersDocument = gql`
+    query SalonOrders($input: SalonOrdersInput) {
+  salonOrders(input: $input) {
+    orders {
+      id
+      customerId
+      salonId
+      pickupAddressId
+      pickupAddress {
+        id
+        userId
+        label
+        address
+        latitude
+        longitude
+        isDefault
+      }
+      status
+      totalAmount
+      createdAt
+      updatedAt
+      items {
+        id
+      }
+    }
+    hasNextPage
+    endCursor
+  }
+}
+    `;
+
+/**
+ * __useSalonOrdersQuery__
+ *
+ * To run a query within a React component, call `useSalonOrdersQuery` and pass it any options that fit your needs.
+ * When your component renders, `useSalonOrdersQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSalonOrdersQuery({
+ *   variables: {
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useSalonOrdersQuery(baseOptions?: ApolloReactHooks.QueryHookOptions<SalonOrdersQuery, SalonOrdersQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return ApolloReactHooks.useQuery<SalonOrdersQuery, SalonOrdersQueryVariables>(SalonOrdersDocument, options);
+      }
+export function useSalonOrdersLazyQuery(baseOptions?: ApolloReactHooks.LazyQueryHookOptions<SalonOrdersQuery, SalonOrdersQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return ApolloReactHooks.useLazyQuery<SalonOrdersQuery, SalonOrdersQueryVariables>(SalonOrdersDocument, options);
+        }
+export type SalonOrdersQueryHookResult = ReturnType<typeof useSalonOrdersQuery>;
+export type SalonOrdersLazyQueryHookResult = ReturnType<typeof useSalonOrdersLazyQuery>;
+export type SalonOrdersQueryResult = Apollo.QueryResult<SalonOrdersQuery, SalonOrdersQueryVariables>;
+export const OrderDocument = gql`
+    query Order($id: ID!) {
+  order(id: $id) {
+    id
+    customerId
+    salonId
+    pickupAddressId
+    status
+    totalAmount
+    createdAt
+    updatedAt
+    customer {
+      id
+      fullName
+      email
+      role
+      profileImage
+      authProvider
+      providerId
+      createdAt
+      updatedAt
+    }
+    salon {
+      id
+      userId
+      name
+      address
+      latitude
+      longitude
+      serviceRadiusKm
+      rating
+      isVerified
+      imageUrl
+      createdAt
+    }
+    items {
+      id
+      nameSnapshot
+      priceSnapshot
+      quantity
+      hairType
+      hairLength
+      notes
+      orderItemUrl
+    }
+    statusEvents {
+      id
+      orderId
+      status
+      message
+      actor
+      createdAt
+    }
+    payments {
+      id
+      orderId
+      customerId
+      provider
+      reference
+      amount
+      status
+      paidAt
+      createdAt
+    }
+  }
+}
+    `;
+
+/**
+ * __useOrderQuery__
+ *
+ * To run a query within a React component, call `useOrderQuery` and pass it any options that fit your needs.
+ * When your component renders, `useOrderQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useOrderQuery({
+ *   variables: {
+ *      id: // value for 'id'
+ *   },
+ * });
+ */
+export function useOrderQuery(baseOptions: ApolloReactHooks.QueryHookOptions<OrderQuery, OrderQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return ApolloReactHooks.useQuery<OrderQuery, OrderQueryVariables>(OrderDocument, options);
+      }
+export function useOrderLazyQuery(baseOptions?: ApolloReactHooks.LazyQueryHookOptions<OrderQuery, OrderQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return ApolloReactHooks.useLazyQuery<OrderQuery, OrderQueryVariables>(OrderDocument, options);
+        }
+export type OrderQueryHookResult = ReturnType<typeof useOrderQuery>;
+export type OrderLazyQueryHookResult = ReturnType<typeof useOrderLazyQuery>;
+export type OrderQueryResult = Apollo.QueryResult<OrderQuery, OrderQueryVariables>;
 export const CreateRevampOrderDocument = gql`
     mutation CreateRevampOrder($input: CreateRevampOrderInput!) {
   createRevampOrder(input: $input) {
@@ -967,6 +1290,126 @@ export function useCreateRevampOrderMutation(baseOptions?: ApolloReactHooks.Muta
 export type CreateRevampOrderMutationHookResult = ReturnType<typeof useCreateRevampOrderMutation>;
 export type CreateRevampOrderMutationResult = Apollo.MutationResult<CreateRevampOrderMutation>;
 export type CreateRevampOrderMutationOptions = Apollo.BaseMutationOptions<CreateRevampOrderMutation, CreateRevampOrderMutationVariables>;
+export const UpdateOrderStatusDocument = gql`
+    mutation UpdateOrderStatus($input: UpdateOrderStatusInput!) {
+  updateOrderStatus(input: $input) {
+    order {
+      id
+      customerId
+      salonId
+      pickupAddressId
+      status
+      totalAmount
+      createdAt
+      updatedAt
+      customer {
+        id
+        fullName
+        email
+        role
+        profileImage
+        authProvider
+        providerId
+        createdAt
+        updatedAt
+      }
+      salon {
+        id
+        userId
+        name
+        address
+        latitude
+        longitude
+        serviceRadiusKm
+        rating
+        isVerified
+        imageUrl
+        createdAt
+      }
+      pickupAddress {
+        id
+        userId
+        label
+        address
+        latitude
+        longitude
+        isDefault
+        createdAt
+      }
+      items {
+        id
+        orderId
+        itemType
+        referenceId
+        serviceId
+        nameSnapshot
+        priceSnapshot
+        quantity
+        hairType
+        hairLength
+        notes
+        orderItemUrl
+        createdAt
+        service {
+          id
+          name
+          description
+          basePrice
+          estimatedDays
+          category
+          isActive
+          createdAt
+        }
+      }
+      statusEvents {
+        id
+        orderId
+        status
+        message
+        actor
+        createdAt
+      }
+      payments {
+        id
+        orderId
+        customerId
+        provider
+        reference
+        amount
+        status
+        paidAt
+        createdAt
+      }
+    }
+  }
+}
+    `;
+export type UpdateOrderStatusMutationFn = Apollo.MutationFunction<UpdateOrderStatusMutation, UpdateOrderStatusMutationVariables>;
+
+/**
+ * __useUpdateOrderStatusMutation__
+ *
+ * To run a mutation, you first call `useUpdateOrderStatusMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateOrderStatusMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [updateOrderStatusMutation, { data, loading, error }] = useUpdateOrderStatusMutation({
+ *   variables: {
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useUpdateOrderStatusMutation(baseOptions?: ApolloReactHooks.MutationHookOptions<UpdateOrderStatusMutation, UpdateOrderStatusMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return ApolloReactHooks.useMutation<UpdateOrderStatusMutation, UpdateOrderStatusMutationVariables>(UpdateOrderStatusDocument, options);
+      }
+export type UpdateOrderStatusMutationHookResult = ReturnType<typeof useUpdateOrderStatusMutation>;
+export type UpdateOrderStatusMutationResult = Apollo.MutationResult<UpdateOrderStatusMutation>;
+export type UpdateOrderStatusMutationOptions = Apollo.BaseMutationOptions<UpdateOrderStatusMutation, UpdateOrderStatusMutationVariables>;
 export const GetOrderDocument = gql`
     query GetOrder($id: ID!) {
   order(id: $id) {
@@ -1387,6 +1830,21 @@ export const GetMyProfileDocument = gql`
       latitude
       longitude
       isDefault
+      createdAt
+    }
+    salonProfile {
+      id
+      userId
+      name
+      address
+      latitude
+      longitude
+      serviceRadiusKm
+      rating
+      isVerified
+      imageUrl
+      isOnline
+      onboardingComplete
       createdAt
     }
   }

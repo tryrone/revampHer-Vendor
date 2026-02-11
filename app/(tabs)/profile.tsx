@@ -11,7 +11,8 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getAccessToken } from "@/storage";
 import { useAuthStore } from "@/store";
 import {
-  useMySalonQuery,
+  useGetMyProfileQuery,
+  useSetSalonOnlineMutation,
   useUpdateSalonProfileMutation,
 } from "@/types/gqlReactTypings.generated";
 import { showToast } from "@/utils/toast";
@@ -20,7 +21,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Modal } from "react-native";
+import { ActivityIndicator, Modal, TextInput, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -426,6 +427,35 @@ const VersionText = styled.Text<{ isDark: boolean }>`
   margin-top: ${Spacing.md}px;
 `;
 
+const EditModalInput = styled(TextInput)<{ isDark: boolean }>`
+  width: 100%;
+  min-height: 48px;
+  border-radius: ${BorderRadius.xl}px;
+  border-width: 1px;
+  border-color: ${(props) =>
+    props.isDark ? Colors.dark.border : Colors.light.border};
+  background-color: ${(props) =>
+    props.isDark ? Colors.dark.backgroundTertiary : Colors.light.background};
+  color: ${(props) => (props.isDark ? Colors.dark.text : Colors.light.text)};
+  padding: 0 ${Spacing.md}px;
+  font-size: ${FontSizes.base}px;
+`;
+
+const EditModalLabel = styled.Text<{ isDark: boolean }>`
+  width: 100%;
+  font-size: ${FontSizes.xs}px;
+  font-weight: ${FontWeights.semibold};
+  color: ${(props) =>
+    props.isDark ? Colors.dark.textSecondary : Colors.light.textSecondary};
+  margin-bottom: ${Spacing.xs}px;
+`;
+
+const EditModalForm = styled.View`
+  width: 100%;
+  gap: ${Spacing.md}px;
+  margin-bottom: ${Spacing.xl}px;
+`;
+
 // Toggle Switch Components
 const ToggleContainer = styled.Pressable<{
   isChecked: boolean;
@@ -516,13 +546,28 @@ export default function ProfileScreen() {
   const logout = useAuthStore((s) => s.logout);
   const token = useAuthStore((s) => s.token);
 
-  const { data } = useMySalonQuery();
-  const mySalon = data?.mySalon;
+  const { data: profileData, refetch: refetchProfile } = useGetMyProfileQuery({
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+  });
+  const mySalon = profileData?.me.salonProfile;
   const [updateSalonProfile] = useUpdateSalonProfileMutation();
+  const [setSalonOnline, { loading: settingSalonOnline }] =
+    useSetSalonOnlineMutation();
 
-  const [isAcceptingBookings, setIsAcceptingBookings] = useState(true);
+  const [isAcceptingBookings, setIsAcceptingBookings] = useState(
+    mySalon?.isOnline ?? true,
+  );
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [uploadingStoreImage, setUploadingStoreImage] = useState(false);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [editBusinessName, setEditBusinessName] = useState("");
+  const [editBusinessAddress, setEditBusinessAddress] = useState("");
+
+  useEffect(() => {
+    setIsAcceptingBookings(mySalon?.isOnline ?? true);
+  }, [mySalon?.isOnline]);
 
   const handlePickAndUploadStoreImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -604,6 +649,11 @@ export default function ProfileScreen() {
           },
         },
       });
+      await refetchProfile();
+      showToast({
+        type: "success",
+        text: "Profile image updated.",
+      });
     } catch {
       showToast({
         type: "error",
@@ -616,7 +666,85 @@ export default function ProfileScreen() {
   };
 
   const handleEditBusinessProfile = () => {
-    console.log("Edit business profile");
+    setEditBusinessName(mySalon?.name ?? "");
+    setEditBusinessAddress(mySalon?.address ?? "");
+    setShowEditProfileModal(true);
+  };
+
+  const handleSaveBusinessProfile = async () => {
+    const businessName = editBusinessName.trim();
+    const address = editBusinessAddress.trim();
+
+    if (!businessName || !address) {
+      showToast({
+        type: "error",
+        text: "Business name and address are required.",
+      });
+      return;
+    }
+
+    if (!mySalon) {
+      showToast({
+        type: "error",
+        text: "Salon profile is not available.",
+      });
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      await updateSalonProfile({
+        variables: {
+          input: {
+            businessName,
+            location: {
+              address,
+              latitude: mySalon.latitude,
+              longitude: mySalon.longitude,
+            },
+            profileImageUrl: mySalon.imageUrl,
+          },
+        },
+      });
+      await refetchProfile();
+      setShowEditProfileModal(false);
+      showToast({
+        type: "success",
+        text: "Business profile updated.",
+      });
+    } catch {
+      showToast({
+        type: "error",
+        text: "Could not update profile. Please try again.",
+      });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleToggleAvailability = async (nextValue: boolean) => {
+    if (settingSalonOnline) return;
+    setIsAcceptingBookings(nextValue);
+    try {
+      await setSalonOnline({
+        variables: {
+          isOnline: nextValue,
+        },
+      });
+      await refetchProfile();
+      showToast({
+        type: "success",
+        text: nextValue
+          ? "You are now accepting bookings."
+          : "You are no longer accepting bookings.",
+      });
+    } catch {
+      setIsAcceptingBookings(!nextValue);
+      showToast({
+        type: "error",
+        text: "Could not update availability. Please try again.",
+      });
+    }
   };
 
   const handleServicesPrices = () => {
@@ -714,24 +842,32 @@ export default function ProfileScreen() {
             </ProfileImageContainer>
             <ProfileInfo>
               <BusinessNameRow>
-                <BusinessName isDark={isDark}>Adanna's Beauty Hub</BusinessName>
-                <MaterialIcons
-                  name="verified"
-                  size={20}
-                  color={PRIMARY_COLOR}
-                  style={
-                    {
-                      fontVariationSettings: "'FILL' 1",
-                    } as React.ComponentProps<typeof MaterialIcons>["style"]
-                  }
-                />
+                <BusinessName isDark={isDark}>
+                  {mySalon?.name || "Your Business"}
+                </BusinessName>
+                {mySalon?.isVerified && (
+                  <MaterialIcons
+                    name="verified"
+                    size={20}
+                    color={PRIMARY_COLOR}
+                    style={
+                      {
+                        fontVariationSettings: "'FILL' 1",
+                      } as React.ComponentProps<typeof MaterialIcons>["style"]
+                    }
+                  />
+                )}
               </BusinessNameRow>
-              <LocationText isDark={isDark}>Lagos, Nigeria</LocationText>
-              <VerifiedBadge isDark={isDark}>
-                <VerifiedBadgeText isDark={isDark}>
-                  Verified Stylist
-                </VerifiedBadgeText>
-              </VerifiedBadge>
+              <LocationText isDark={isDark}>
+                {mySalon?.address || "Location not set"}
+              </LocationText>
+              {mySalon?.isVerified && (
+                <VerifiedBadge isDark={isDark}>
+                  <VerifiedBadgeText isDark={isDark}>
+                    Verified Stylist
+                  </VerifiedBadgeText>
+                </VerifiedBadge>
+              )}
             </ProfileInfo>
           </ProfileHeader>
 
@@ -756,7 +892,7 @@ export default function ProfileScreen() {
             </AvailabilityLeft>
             <ToggleSwitch
               value={isAcceptingBookings}
-              onValueChange={setIsAcceptingBookings}
+              onValueChange={handleToggleAvailability}
               isDark={isDark}
             />
           </AvailabilityCard>
@@ -870,7 +1006,7 @@ export default function ProfileScreen() {
                     Location Settings
                   </ListItemTitle>
                   <ListItemSubtitle isDark={isDark}>
-                    Lekki Phase 1, Lagos
+                    {mySalon?.address || "Address not set"}
                   </ListItemSubtitle>
                 </ListItemContent>
                 <MaterialIcons
@@ -997,7 +1133,9 @@ export default function ProfileScreen() {
                 </ListItemContent>
                 <ListItemRight>
                   <Badge isDark={isDark}>
-                    <BadgeText isDark={isDark}>On</BadgeText>
+                    <BadgeText isDark={isDark}>
+                      {profileData?.me.notificationsEnabled ? "On" : "Off"}
+                    </BadgeText>
                   </Badge>
                 </ListItemRight>
               </ListItem>
@@ -1053,6 +1191,72 @@ export default function ProfileScreen() {
           <VersionText isDark={isDark}>Version 2.4.0</VersionText>
         </ContentWrapper>
       </ScrollContent>
+
+      {/* Edit business profile modal */}
+      <Modal
+        visible={showEditProfileModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEditProfileModal(false)}
+      >
+        <ModalOverlay onPress={() => setShowEditProfileModal(false)}>
+          <LogoutModalBox isDark={isDark}>
+            <LogoutModalTitle isDark={isDark}>Edit Business Profile</LogoutModalTitle>
+            <EditModalForm>
+              <View>
+                <EditModalLabel isDark={isDark}>Business Name</EditModalLabel>
+                <EditModalInput
+                  isDark={isDark}
+                  value={editBusinessName}
+                  onChangeText={setEditBusinessName}
+                  placeholder="Business Name"
+                  placeholderTextColor={
+                    isDark ? Colors.dark.textTertiary : Colors.light.textTertiary
+                  }
+                />
+              </View>
+              <View>
+                <EditModalLabel isDark={isDark}>Business Address</EditModalLabel>
+                <EditModalInput
+                  isDark={isDark}
+                  value={editBusinessAddress}
+                  onChangeText={setEditBusinessAddress}
+                  placeholder="Business Address"
+                  placeholderTextColor={
+                    isDark ? Colors.dark.textTertiary : Colors.light.textTertiary
+                  }
+                />
+              </View>
+            </EditModalForm>
+            <LogoutModalButtons>
+              <LogoutModalConfirmButton
+                onPress={handleSaveBusinessProfile}
+                android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
+                disabled={savingProfile}
+              >
+                {savingProfile ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <LogoutModalConfirmButtonText>Save</LogoutModalConfirmButtonText>
+                )}
+              </LogoutModalConfirmButton>
+              <LogoutModalCancelButton
+                isDark={isDark}
+                onPress={() => setShowEditProfileModal(false)}
+                android_ripple={{
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)",
+                }}
+              >
+                <LogoutModalCancelButtonText isDark={isDark}>
+                  Cancel
+                </LogoutModalCancelButtonText>
+              </LogoutModalCancelButton>
+            </LogoutModalButtons>
+          </LogoutModalBox>
+        </ModalOverlay>
+      </Modal>
 
       {/* Logout confirmation modal */}
       <Modal

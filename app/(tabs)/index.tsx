@@ -7,11 +7,24 @@ import {
   Spacing,
 } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { showToast } from "@/utils/toast";
+import type {
+  SalonCreatedOrdersQuery,
+  SalonOrdersQuery,
+} from "@/types/gqlReactTypings.generated";
+import {
+  OrderStatus,
+  StatusActor,
+  useGetMyProfileQuery,
+  useSalonCreatedOrdersQuery,
+  useSalonOrdersQuery,
+  useUpdateOrderStatusMutation,
+} from "@/types/gqlReactTypings.generated";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
-import { View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
@@ -248,7 +261,7 @@ const TabsWrapper = styled.View<{ isDark: boolean }>`
 
 const TabButton = styled.Pressable<{ isActive: boolean; isDark: boolean }>`
   flex: 1;
-  padding: ${Spacing.sm}px ${Spacing.md}px;
+  padding: ${Spacing.sm}px ${Spacing.sm}px;
   border-radius: ${BorderRadius.lg}px;
   background-color: ${(props) =>
     props.isActive
@@ -276,12 +289,25 @@ const TabButtonText = styled.Text<{ isActive: boolean; isDark: boolean }>`
         ? Colors.dark.text
         : Colors.light.text
       : props.isDark
-      ? Colors.dark.textSecondary
-      : Colors.light.textSecondary};
+        ? Colors.dark.textSecondary
+        : Colors.light.textSecondary};
 `;
 
 const OrdersList = styled.View`
   gap: ${Spacing.md}px;
+`;
+
+const EmptyState = styled.View`
+  align-items: center;
+  justify-content: center;
+  padding: ${Spacing.xl}px;
+  gap: ${Spacing.sm}px;
+`;
+
+const EmptyStateText = styled.Text<{ isDark: boolean }>`
+  font-size: ${FontSizes.sm}px;
+  color: ${(props) =>
+    props.isDark ? Colors.dark.textSecondary : Colors.light.textSecondary};
 `;
 
 const OrderCard = styled.Pressable<{ isDark: boolean }>`
@@ -311,12 +337,6 @@ const OrderClientInfo = styled.View`
   flex-direction: row;
   gap: ${Spacing.md}px;
   flex: 1;
-`;
-
-const OrderClientImage = styled(Image)`
-  width: 48px;
-  height: 48px;
-  border-radius: ${BorderRadius.xl}px;
 `;
 
 const OrderClientImagePlaceholder = styled.View<{ isDark: boolean }>`
@@ -401,7 +421,7 @@ const OrderActions = styled.View`
   align-items: center;
 `;
 
-const DeclineButton = styled.Pressable<{ isDark: boolean }>`
+const DeclineButton = styled.TouchableOpacity<{ isDark: boolean }>`
   width: 40px;
   height: 40px;
   border-radius: 20px;
@@ -412,7 +432,7 @@ const DeclineButton = styled.Pressable<{ isDark: boolean }>`
   justify-content: center;
 `;
 
-const AcceptButton = styled.Pressable`
+const AcceptButton = styled.TouchableOpacity`
   height: 40px;
   padding: 0 ${Spacing.xl}px;
   border-radius: ${BorderRadius.full}px;
@@ -432,38 +452,10 @@ const AcceptButtonText = styled.Text`
   color: #ffffff;
 `;
 
-const FloatingActionButton = styled.Pressable<{
-  paddingBottom: number;
-  isDark: boolean;
-}>`
-  position: absolute;
-  bottom: ${(props) => props.paddingBottom + 80}px;
-  right: ${Spacing.md}px;
-  z-index: 30;
-  flex-direction: row;
-  align-items: center;
-  gap: ${Spacing.sm}px;
-  padding: ${Spacing.md}px ${Spacing.xl}px ${Spacing.md}px ${Spacing.md}px;
-  border-radius: ${BorderRadius.full}px;
-  background-color: ${(props) =>
-    props.isDark ? Colors.light.background : Colors.dark.background};
-  shadow-color: rgba(0, 0, 0, 0.2);
-  shadow-offset: 0px 4px;
-  shadow-opacity: 1;
-  shadow-radius: 12px;
-  elevation: 8;
-`;
-
-const FABText = styled.Text<{ isDark: boolean }>`
-  font-size: ${FontSizes.sm}px;
-  font-weight: ${FontWeights.bold};
-  color: ${(props) =>
-    props.isDark ? Colors.dark.background : Colors.light.background};
-`;
-
 // Sample order data type
 type Order = {
   id: string;
+  rawStatus: OrderStatus;
   orderId: string;
   status: string;
   placedDate: string;
@@ -488,6 +480,118 @@ type Order = {
   stylistImageUrl?: string;
 };
 
+type ApiOrder =
+  | SalonCreatedOrdersQuery["salonCreatedOrders"]["orders"][number]
+  | SalonOrdersQuery["salonOrders"]["orders"][number];
+
+const NEW_STATUSES = new Set<OrderStatus>([OrderStatus.Created]);
+const COMPLETED_STATUSES = new Set<OrderStatus>([OrderStatus.Delivered]);
+const EXCLUDED_ACTIVE_STATUSES = new Set<OrderStatus>([
+  OrderStatus.Cancelled,
+  ...NEW_STATUSES,
+  ...COMPLETED_STATUSES,
+]);
+
+const formatAmount = (amount: number): string => {
+  return amount.toLocaleString("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    maximumFractionDigits: 0,
+  });
+};
+
+const toDate = (value: unknown): Date | null => {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatTime = (value: unknown): string => {
+  const date = toDate(value);
+  if (!date) {
+    return "--";
+  }
+
+  return date.toLocaleTimeString("en-NG", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+const formatDateTime = (value: unknown): string => {
+  const date = toDate(value);
+  if (!date) {
+    return "Date unavailable";
+  }
+
+  return date.toLocaleString("en-NG", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+const statusLabel = (status: OrderStatus): string =>
+  status.replace(/_/g, " ").toUpperCase();
+
+const getCustomerName = (order: ApiOrder): string => {
+  if ("customer" in order && order.customer?.fullName?.trim()) {
+    return order.customer.fullName.trim();
+  }
+
+  return `Customer ${order.customerId.slice(0, 6)}`;
+};
+
+const getCustomerLocation = (order: ApiOrder): string => {
+  if ("pickupAddress" in order && order.pickupAddress?.address?.trim()) {
+    return order.pickupAddress.address.trim();
+  }
+
+  return "Location unavailable";
+};
+
+const mapOrderToUiOrder = (order: ApiOrder): Order => {
+  const firstItem = order.items[0];
+  const serviceName =
+    firstItem && "nameSnapshot" in firstItem && firstItem.nameSnapshot
+      ? firstItem.nameSnapshot
+      : "Service";
+  const amount = formatAmount(order.totalAmount);
+  const customerName = getCustomerName(order);
+  const customerLocation = getCustomerLocation(order);
+
+  return {
+    id: order.id,
+    rawStatus: order.status,
+    orderId: order.id.slice(-6).toUpperCase(),
+    status: statusLabel(order.status),
+    placedDate: formatDateTime(order.createdAt),
+    serviceTitle: serviceName,
+    clientName: customerName,
+    clientAddress: customerLocation,
+    service: serviceName,
+    location: customerLocation,
+    time: formatTime(order.createdAt),
+    price: amount,
+    serviceCost: amount,
+    transportFee: formatAmount(0),
+    totalPaid: amount,
+    paymentMethod: "Payment details unavailable",
+    rating: "0.0",
+    orderCount: "0",
+    dateTime: formatDateTime(order.createdAt),
+    duration: "N/A",
+    locationType: "Service",
+  };
+};
+
 export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -495,62 +599,111 @@ export default function HomeScreen() {
   const isDark = colorScheme === "dark";
 
   const [activeTab, setActiveTab] = useState<"new" | "active" | "completed">(
-    "new"
+    "new",
   );
+  const [refreshing, setRefreshing] = useState(false);
+  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
 
-  // Sample orders data
-  const orders: Order[] = [
-    {
-      id: "1",
-      orderId: "2049",
-      status: "CONFIRMED",
-      placedDate: "Oct 12, 09:30 AM",
-      serviceTitle: "Knotless Braids (Medium)",
-      clientName: "Amara N.",
-      clientAddress: "14 Admiralty Way, Lekki Phase 1, Lagos",
-      service: "Knotless Braids • Medium",
-      location: "Lekki Phase 1, Lagos",
-      time: "10:00 AM",
-      price: "₦ 15,000",
-      serviceCost: "₦15,000",
-      transportFee: "₦2,000",
-      totalPaid: "₦17,000",
-      paymentMethod: "Paid via Transfer",
-      rating: "4.8",
-      orderCount: "12",
-      dateTime: "Tue, 14 Oct • 10:00 AM",
-      duration: "4 Hours",
-      locationType: "Home Service",
+  const { data: profileData } = useGetMyProfileQuery();
+
+  const {
+    data: salonCreatedOrdersData,
+    loading: inProgressLoading,
+    refetch: refetchSalonCreatedOrders,
+  } = useSalonCreatedOrdersQuery({
+    variables: {
+      input: { limit: 100, salonId: profileData?.me.salonProfile?.id },
     },
-    {
-      id: "2",
-      orderId: "2050",
-      status: "CONFIRMED",
-      placedDate: "Oct 12, 02:00 PM",
-      serviceTitle: "Wig Install (Frontal)",
-      clientName: "Chioma K.",
-      clientAddress: "15 Awolowo Road, Ikeja GRA, Lagos",
-      service: "Wig Install • Frontal",
-      location: "Ikeja GRA, Lagos",
-      time: "2:00 PM",
-      price: "₦ 8,000",
-      serviceCost: "₦8,000",
-      transportFee: "₦1,500",
-      totalPaid: "₦9,500",
-      paymentMethod: "Paid via Transfer",
-      rating: "4.9",
-      orderCount: "8",
-      dateTime: "Wed, 15 Oct • 2:00 PM",
-      duration: "3 Hours",
-      locationType: "Home Service",
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+    skip: !profileData?.me.salonProfile?.id,
+  });
+
+  const {
+    data: salonOrdersData,
+    loading: salonOrdersLoading,
+    refetch: refetchSalonOrders,
+  } = useSalonOrdersQuery({
+    variables: {
+      input: { limit: 100, salonId: profileData?.me.salonProfile?.id },
     },
-  ];
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+    skip: !profileData?.me.salonProfile?.id,
+  });
+  const [updateOrderStatus] = useUpdateOrderStatusMutation();
+
+  const isLoadingOrders = inProgressLoading || salonOrdersLoading;
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetchSalonCreatedOrders(), refetchSalonOrders()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchSalonCreatedOrders, refetchSalonOrders]);
+
+  const newOrders = useMemo(() => {
+    return (
+      salonCreatedOrdersData?.salonCreatedOrders.orders
+        .filter((order) => NEW_STATUSES.has(order.status))
+        .sort((a, b) => {
+          const bUpdatedAt = toDate(b.updatedAt)?.getTime() ?? 0;
+          const aUpdatedAt = toDate(a.updatedAt)?.getTime() ?? 0;
+          return bUpdatedAt - aUpdatedAt;
+        }) ?? []
+    );
+  }, [salonCreatedOrdersData?.salonCreatedOrders.orders]);
+
+  const activeOrders = useMemo(() => {
+    return (
+      salonOrdersData?.salonOrders.orders
+        .filter((order) => !EXCLUDED_ACTIVE_STATUSES.has(order.status))
+        .sort((a, b) => {
+          const bUpdatedAt = toDate(b.updatedAt)?.getTime() ?? 0;
+          const aUpdatedAt = toDate(a.updatedAt)?.getTime() ?? 0;
+          return bUpdatedAt - aUpdatedAt;
+        }) ?? []
+    );
+  }, [salonOrdersData?.salonOrders.orders]);
+
+  const completedOrders = useMemo(() => {
+    return (
+      salonOrdersData?.salonOrders.orders
+        .filter((order) => COMPLETED_STATUSES.has(order.status))
+        .sort((a, b) => {
+          const bUpdatedAt = toDate(b.updatedAt)?.getTime() ?? 0;
+          const aUpdatedAt = toDate(a.updatedAt)?.getTime() ?? 0;
+          return bUpdatedAt - aUpdatedAt;
+        }) ?? []
+    );
+  }, [salonOrdersData?.salonOrders.orders]);
+
+  const tabOrders = useMemo(() => {
+    if (activeTab === "new") {
+      return newOrders.map(mapOrderToUiOrder);
+    }
+    if (activeTab === "active") {
+      return activeOrders.map(mapOrderToUiOrder);
+    }
+    return completedOrders.map(mapOrderToUiOrder);
+  }, [activeTab, activeOrders, completedOrders, newOrders]);
+
+  const completedCount = completedOrders.length;
+  const totalOrderCount =
+    newOrders.length + activeOrders.length + completedCount;
+  const completionPercentage =
+    totalOrderCount > 0 ? (completedCount / totalOrderCount) * 100 : 0;
+  const profileFullName = profileData?.me.fullName?.trim() || "Vendor";
+  const greetingName = profileFullName.split(" ")[0] || profileFullName;
 
   const handleOrderPress = (order: Order) => {
     router.push({
       pathname: "/order-details",
       params: {
         orderId: order.orderId,
+        orderQueryId: order.id,
         status: order.status,
         placedDate: order.placedDate,
         serviceTitle: order.serviceTitle,
@@ -569,16 +722,78 @@ export default function HomeScreen() {
     });
   };
 
-  const handleAccept = (orderId: string) => {
-    console.log("Accept order:", orderId);
+  const handleAccept = async (order: Order) => {
+    if (processingOrderId) return;
+    if (order.rawStatus !== OrderStatus.Created) {
+      showToast({
+        type: "error",
+        text: "Only newly created orders can be accepted.",
+      });
+      return;
+    }
+
+    setProcessingOrderId(order.id);
+    try {
+      await updateOrderStatus({
+        variables: {
+          input: {
+            orderId: order.id,
+            status: OrderStatus.AcceptedBySalon,
+            actor: StatusActor.Salon,
+            message: "Order accepted by salon",
+          },
+        },
+      });
+      await Promise.all([refetchSalonCreatedOrders(), refetchSalonOrders()]);
+      showToast({
+        type: "success",
+        text: "Order accepted.",
+      });
+    } catch {
+      showToast({
+        type: "error",
+        text: "Failed to accept order. Please try again.",
+      });
+    } finally {
+      setProcessingOrderId(null);
+    }
   };
 
-  const handleDecline = (orderId: string) => {
-    console.log("Decline order:", orderId);
-  };
+  const handleDecline = async (order: Order) => {
+    if (processingOrderId) return;
+    if (order.rawStatus !== OrderStatus.Created) {
+      showToast({
+        type: "error",
+        text: "Only newly created orders can be rejected.",
+      });
+      return;
+    }
 
-  const handleWalkIn = () => {
-    console.log("Walk-in");
+    setProcessingOrderId(order.id);
+    try {
+      await updateOrderStatus({
+        variables: {
+          input: {
+            orderId: order.id,
+            status: OrderStatus.Cancelled,
+            actor: StatusActor.Salon,
+            message: "Order rejected by salon",
+          },
+        },
+      });
+      await Promise.all([refetchSalonCreatedOrders(), refetchSalonOrders()]);
+      showToast({
+        type: "success",
+        text: "Order rejected.",
+      });
+    } catch {
+      showToast({
+        type: "error",
+        text: "Failed to reject order. Please try again.",
+      });
+    } finally {
+      setProcessingOrderId(null);
+    }
   };
 
   const handleNotification = () => {
@@ -607,7 +822,7 @@ export default function HomeScreen() {
             </ProfileImageContainer>
             <GreetingText>
               <GreetingLabel isDark={isDark}>Good morning,</GreetingLabel>
-              <GreetingName isDark={isDark}>Tolu</GreetingName>
+              <GreetingName isDark={isDark}>{greetingName}</GreetingName>
             </GreetingText>
           </ProfileSection>
           <NotificationButton
@@ -639,6 +854,14 @@ export default function HomeScreen() {
         contentContainerStyle={{
           flexGrow: 1,
         }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={PRIMARY_COLOR}
+            colors={[PRIMARY_COLOR]}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
         <ContentWrapper>
@@ -674,11 +897,15 @@ export default function HomeScreen() {
               </StatCardHeader>
               <View>
                 <CompletedValue>
-                  <StatCardValue isDark={isDark}>3</StatCardValue>
-                  <CompletedFraction isDark={isDark}>/8</CompletedFraction>
+                  <StatCardValue isDark={isDark}>
+                    {completedCount}
+                  </StatCardValue>
+                  <CompletedFraction isDark={isDark}>
+                    /{totalOrderCount}
+                  </CompletedFraction>
                 </CompletedValue>
                 <ProgressBarContainer isDark={isDark}>
-                  <ProgressBarFill percentage={37.5} />
+                  <ProgressBarFill percentage={completionPercentage} />
                 </ProgressBarContainer>
               </View>
             </StatCard>
@@ -699,9 +926,10 @@ export default function HomeScreen() {
                 }}
               >
                 <TabButtonText isActive={activeTab === "new"} isDark={isDark}>
-                  New (2)
+                  New ({newOrders.length})
                 </TabButtonText>
               </TabButton>
+
               <TabButton
                 isActive={activeTab === "active"}
                 isDark={isDark}
@@ -717,9 +945,10 @@ export default function HomeScreen() {
                   isActive={activeTab === "active"}
                   isDark={isDark}
                 >
-                  Active (1)
+                  Active ({activeOrders.length})
                 </TabButtonText>
               </TabButton>
+
               <TabButton
                 isActive={activeTab === "completed"}
                 isDark={isDark}
@@ -735,7 +964,7 @@ export default function HomeScreen() {
                   isActive={activeTab === "completed"}
                   isDark={isDark}
                 >
-                  Completed
+                  Completed ({completedCount})
                 </TabButtonText>
               </TabButton>
             </TabsWrapper>
@@ -743,95 +972,122 @@ export default function HomeScreen() {
 
           {/* Orders List */}
           <OrdersList>
-            {orders.map((order) => (
-              <OrderCard
-                key={order.id}
-                isDark={isDark}
-                onPress={() => handleOrderPress(order)}
-                android_ripple={{
-                  color: isDark
-                    ? "rgba(255, 255, 255, 0.05)"
-                    : "rgba(0, 0, 0, 0.05)",
-                  borderless: false,
-                }}
-              >
-                <OrderHeader>
-                  <OrderClientInfo>
-                    <OrderClientImagePlaceholder isDark={isDark}>
-                      <MaterialIcons
-                        name="person"
-                        size={24}
-                        color={
-                          isDark
-                            ? Colors.dark.textSecondary
-                            : Colors.light.textSecondary
-                        }
-                      />
-                    </OrderClientImagePlaceholder>
-                    <OrderClientDetails>
-                      <OrderClientName isDark={isDark}>
-                        {order.clientName}
-                      </OrderClientName>
-                      <OrderService isDark={isDark}>
-                        {order.service}
-                      </OrderService>
-                    </OrderClientDetails>
-                  </OrderClientInfo>
-                  <TimeBadge isDark={isDark}>
-                    <TimeBadgeText isDark={isDark}>{order.time}</TimeBadgeText>
-                  </TimeBadge>
-                </OrderHeader>
+            {isLoadingOrders ? (
+              <EmptyState>
+                <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+                <EmptyStateText isDark={isDark}>
+                  Loading orders...
+                </EmptyStateText>
+              </EmptyState>
+            ) : tabOrders.length === 0 ? (
+              <EmptyState>
+                <EmptyStateText isDark={isDark}>
+                  No {activeTab} orders available.
+                </EmptyStateText>
+              </EmptyState>
+            ) : (
+              tabOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  isDark={isDark}
+                  onPress={() => handleOrderPress(order)}
+                  android_ripple={{
+                    color: isDark
+                      ? "rgba(255, 255, 255, 0.05)"
+                      : "rgba(0, 0, 0, 0.05)",
+                    borderless: false,
+                  }}
+                >
+                  <OrderHeader>
+                    <OrderClientInfo>
+                      <OrderClientImagePlaceholder isDark={isDark}>
+                        <MaterialIcons
+                          name="person"
+                          size={24}
+                          color={
+                            isDark
+                              ? Colors.dark.textSecondary
+                              : Colors.light.textSecondary
+                          }
+                        />
+                      </OrderClientImagePlaceholder>
+                      <OrderClientDetails>
+                        <OrderClientName isDark={isDark}>
+                          {order.clientName}
+                        </OrderClientName>
+                        <OrderService isDark={isDark}>
+                          {order.service}
+                        </OrderService>
+                      </OrderClientDetails>
+                    </OrderClientInfo>
+                    <TimeBadge isDark={isDark}>
+                      <TimeBadgeText isDark={isDark}>
+                        {order.time}
+                      </TimeBadgeText>
+                    </TimeBadge>
+                  </OrderHeader>
 
-                <LocationRow isDark={isDark}>
-                  <MaterialIcons
-                    name="location-on"
-                    size={18}
-                    color={
-                      isDark
-                        ? Colors.dark.textTertiary
-                        : Colors.light.textTertiary
-                    }
-                  />
-                  <LocationText isDark={isDark}>{order.location}</LocationText>
-                </LocationRow>
+                  <LocationRow isDark={isDark}>
+                    <MaterialIcons
+                      name="location-on"
+                      size={18}
+                      color={
+                        isDark
+                          ? Colors.dark.textTertiary
+                          : Colors.light.textTertiary
+                      }
+                    />
+                    <LocationText isDark={isDark}>
+                      {order.location}
+                    </LocationText>
+                  </LocationRow>
 
-                <OrderFooter isDark={isDark}>
-                  <OrderPrice isDark={isDark}>{order.price}</OrderPrice>
-                  <OrderActions>
-                    <DeclineButton
-                      isDark={isDark}
-                      onPress={() => handleDecline(order.id)}
-                      android_ripple={{
-                        color: isDark
-                          ? "rgba(255, 255, 255, 0.1)"
-                          : "rgba(0, 0, 0, 0.05)",
-                        borderless: false,
-                        radius: 20,
-                      }}
-                    >
-                      <MaterialIcons
-                        name="close"
-                        size={20}
-                        color={
-                          isDark
-                            ? Colors.dark.textSecondary
-                            : Colors.light.textSecondary
-                        }
-                      />
-                    </DeclineButton>
-                    <AcceptButton
-                      onPress={() => handleAccept(order.id)}
-                      android_ripple={{
-                        color: "rgba(255, 255, 255, 0.2)",
-                        borderless: false,
-                      }}
-                    >
-                      <AcceptButtonText>Accept</AcceptButtonText>
-                    </AcceptButton>
-                  </OrderActions>
-                </OrderFooter>
-              </OrderCard>
-            ))}
+                  <OrderFooter isDark={isDark}>
+                    <OrderPrice isDark={isDark}>{order.price}</OrderPrice>
+                    {order.rawStatus === OrderStatus.Created && (
+                      <OrderActions>
+                        <DeclineButton
+                          isDark={isDark}
+                          onPress={() => handleDecline(order)}
+                          disabled={processingOrderId === order.id}
+                        >
+                          {processingOrderId === order.id ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={
+                                isDark
+                                  ? Colors.dark.textSecondary
+                                  : Colors.light.textSecondary
+                              }
+                            />
+                          ) : (
+                            <MaterialIcons
+                              name="close"
+                              size={20}
+                              color={
+                                isDark
+                                  ? Colors.dark.textSecondary
+                                  : Colors.light.textSecondary
+                              }
+                            />
+                          )}
+                        </DeclineButton>
+                        <AcceptButton
+                          onPress={() => handleAccept(order)}
+                          disabled={processingOrderId === order.id}
+                        >
+                          {processingOrderId === order.id ? (
+                            <ActivityIndicator size="small" color="#ffffff" />
+                          ) : (
+                            <AcceptButtonText>Accept</AcceptButtonText>
+                          )}
+                        </AcceptButton>
+                      </OrderActions>
+                    )}
+                  </OrderFooter>
+                </OrderCard>
+              ))
+            )}
           </OrdersList>
         </ContentWrapper>
       </MainContent>

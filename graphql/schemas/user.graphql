@@ -2,6 +2,7 @@ extend type User {
   notificationsEnabled: Boolean!
   officeAddress: Address
   defaultAddress: Address
+  salonProfile: Salon
 }
 
 input OfficeAddressInput {
@@ -22,6 +23,7 @@ input UpdateProfileInput {
 
 extend type Query {
   me: User!
+  getMyProfile: User!
 }
 
 extend type Mutation {
@@ -60,6 +62,21 @@ query GetMyProfile {
       latitude
       longitude
       isDefault
+      createdAt
+    }
+    salonProfile {
+      id
+      userId
+      name
+      address
+      latitude
+      longitude
+      serviceRadiusKm
+      rating
+      isVerified
+      imageUrl
+      isOnline
+      onboardingComplete
       createdAt
     }
   }

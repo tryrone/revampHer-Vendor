@@ -7,9 +7,17 @@ import {
   Spacing,
 } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  OrderStatus,
+  StatusActor,
+  useGetOrderQuery,
+  useUpdateOrderStatusMutation,
+} from "@/types/gqlReactTypings.generated";
+import { showToast } from "@/utils/toast";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
+import React, { useMemo, useState } from "react";
+import { ActivityIndicator, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
@@ -194,7 +202,7 @@ const QuickActions = styled.View`
   gap: ${Spacing.md}px;
 `;
 
-const QuickActionButton = styled.Pressable<{ isDark: boolean }>`
+const QuickActionButton = styled.Pressable<{ isDark: boolean; disabled?: boolean }>`
   flex: 1;
   height: 40px;
   flex-direction: row;
@@ -203,6 +211,7 @@ const QuickActionButton = styled.Pressable<{ isDark: boolean }>`
   gap: ${Spacing.sm}px;
   border-radius: ${BorderRadius.xl}px;
   background-color: ${PRIMARY_COLOR}1A;
+  opacity: ${(props) => (props.disabled ? 0.5 : 1)};
 `;
 
 const QuickActionButtonText = styled.Text`
@@ -330,6 +339,8 @@ const StylistImagePlaceholder = styled.View<{ isDark: boolean }>`
     props.isDark
       ? Colors.dark.backgroundTertiary
       : Colors.light.backgroundTertiary};
+  align-items: center;
+  justify-content: center;
 `;
 
 const LocationTypeInfo = styled.View`
@@ -491,8 +502,8 @@ const SecondaryActionButton = styled.Pressable<{
     props.outlined
       ? "transparent"
       : props.isDark
-      ? Colors.dark.background
-      : Colors.light.backgroundTertiary};
+        ? Colors.dark.background
+        : Colors.light.backgroundTertiary};
   border-width: ${(props) => (props.outlined ? 2 : 0)}px;
   border-color: ${(props) =>
     props.isDark ? Colors.dark.border : Colors.light.border};
@@ -512,9 +523,38 @@ export default function OrderDetailsScreen() {
   const insets = useSafeAreaInsets();
   const isDark = colorScheme === "dark";
 
-  // Get order data from params or use defaults
-  const orderId = (params.orderId as string) || "2049";
-  const status = (params.status as string) || "CONFIRMED";
+  const routeOrderId = (params.orderId as string) || "";
+  const orderQueryId = (params.orderQueryId as string) || routeOrderId || "";
+  const { data: orderData, refetch: refetchOrder } = useGetOrderQuery({
+    variables: { id: orderQueryId || "unknown" },
+    skip: !orderQueryId,
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+  });
+  const [updateOrderStatus] = useUpdateOrderStatusMutation();
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // Get order data from params or API fallback
+  const displayOrderId =
+    (params.orderDisplayId as string) ||
+    (routeOrderId ? routeOrderId.slice(-6).toUpperCase() : "") ||
+    (orderData?.order.id ? orderData.order.id.slice(-6).toUpperCase() : "") ||
+    "2049";
+  const statusFromParams = (params.status as string) || "CONFIRMED";
+  const effectiveStatus = orderData?.order.status ?? null;
+  const statusFromParamsEnum = useMemo(() => {
+    const normalized = statusFromParams.trim().toUpperCase().replace(/\s+/g, "_");
+    return (Object.values(OrderStatus) as string[]).includes(normalized)
+      ? (normalized as OrderStatus)
+      : null;
+  }, [statusFromParams]);
+  const currentStatus = effectiveStatus ?? statusFromParamsEnum;
+  const status = useMemo(() => {
+    if (currentStatus) {
+      return currentStatus.replace(/_/g, " ");
+    }
+    return statusFromParams;
+  }, [currentStatus, statusFromParams]);
   const placedDate = (params.placedDate as string) || "Oct 12, 09:30 AM";
   const serviceTitle =
     (params.serviceTitle as string) || "Knotless Braids (Medium)";
@@ -525,12 +565,32 @@ export default function OrderDetailsScreen() {
   const rating = (params.rating as string) || "4.8";
   const orderCount = (params.orderCount as string) || "12";
   const dateTime = (params.dateTime as string) || "Tue, 14 Oct • 10:00 AM";
-  const duration = (params.duration as string) || "4 Hours";
+  const estimatedDurationDays = orderData?.order.items.reduce((total, item) => {
+    return total + (item.service?.estimatedDays ?? 0);
+  }, 0);
+  const durationFromOrder =
+    orderData?.order.requestedReturnDays && orderData.order.requestedReturnDays > 0
+      ? `${orderData.order.requestedReturnDays} ${
+          orderData.order.requestedReturnDays === 1 ? "Day" : "Days"
+        }`
+      : estimatedDurationDays && estimatedDurationDays > 0
+      ? `${estimatedDurationDays} ${estimatedDurationDays === 1 ? "Day" : "Days"}`
+      : "";
+  const duration = durationFromOrder || (params.duration as string) || "N/A";
   const locationType = (params.locationType as string) || "Home Service";
   const serviceCost = (params.serviceCost as string) || "₦15,000";
   const transportFee = (params.transportFee as string) || "₦2,000";
   const totalPaid = (params.totalPaid as string) || "₦17,000";
   const paymentMethod = (params.paymentMethod as string) || "Paid via Transfer";
+  const rawPhoneNumber =
+    orderData?.order.customer.phone ||
+    orderData?.order.phoneNumber ||
+    (params.phoneNumber as string) ||
+    (params.clientPhone as string) ||
+    (params.phone as string) ||
+    "";
+  const phoneNumber = rawPhoneNumber.replace(/[^\d+]/g, "");
+  const hasPhoneNumber = phoneNumber.length > 0;
 
   const handleBack = () => {
     router.back();
@@ -540,29 +600,184 @@ export default function OrderDetailsScreen() {
     console.log("Open help");
   };
 
-  const handleCall = () => {
-    console.log("Call client");
+  const handleCall = async () => {
+    if (!hasPhoneNumber) {
+      showToast({
+        type: "error",
+        text: "Customer phone number is not available.",
+      });
+      return;
+    }
+
+    const url = `tel:${phoneNumber}`;
+    const supported = await Linking.canOpenURL(url);
+    if (!supported) {
+      showToast({
+        type: "error",
+        text: "Calling is not supported on this device.",
+      });
+      return;
+    }
+
+    await Linking.openURL(url);
   };
 
-  const handleMessage = () => {
-    console.log("Message client");
+  const handleMessage = async () => {
+    if (!hasPhoneNumber) {
+      showToast({
+        type: "error",
+        text: "Customer phone number is not available.",
+      });
+      return;
+    }
+
+    const url = `sms:${phoneNumber}`;
+    const supported = await Linking.canOpenURL(url);
+    if (!supported) {
+      showToast({
+        type: "error",
+        text: "Messaging is not supported on this device.",
+      });
+      return;
+    }
+
+    await Linking.openURL(url);
   };
 
   const handleViewHistory = () => {
     console.log("View client history");
   };
 
-  const handleMarkInProgress = () => {
-    console.log("Mark as in progress");
+  const handleAcceptOrder = async () => {
+    if (!orderQueryId || isUpdatingStatus) {
+      return;
+    }
+
+    setIsUpdatingStatus(true);
+    try {
+      await updateOrderStatus({
+        variables: {
+          input: {
+            orderId: orderQueryId,
+            status: OrderStatus.AcceptedBySalon,
+            actor: StatusActor.Salon,
+            message: "Order accepted by salon",
+          },
+        },
+      });
+      await refetchOrder();
+      showToast({
+        type: "success",
+        text: "Order accepted.",
+      });
+    } catch {
+      showToast({
+        type: "error",
+        text: "Could not accept order. Please try again.",
+      });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
-  const handleCancel = () => {
-    console.log("Cancel order");
+  const vendorProgressAction = useMemo(() => {
+    if (currentStatus === OrderStatus.AcceptedBySalon) {
+      return {
+        label: "Order Received",
+        nextStatus: OrderStatus.AtSalon,
+        message: "Order received at salon",
+      };
+    }
+    if (
+      currentStatus === OrderStatus.AtSalon ||
+      currentStatus === OrderStatus.Revamping
+    ) {
+      return {
+        label: "Order Completed",
+        nextStatus: OrderStatus.ReadyForDelivery,
+        message: "Order completed by salon",
+      };
+    }
+    if (currentStatus === OrderStatus.ReadyForDelivery) {
+      return {
+        label: "Rider Picked Up",
+        nextStatus: OrderStatus.PickedUp,
+        message: "Order picked up by rider",
+      };
+    }
+    return null;
+  }, [currentStatus]);
+
+  const handleVendorProgress = async () => {
+    if (!vendorProgressAction || !orderQueryId || isUpdatingStatus) {
+      return;
+    }
+
+    setIsUpdatingStatus(true);
+    try {
+      await updateOrderStatus({
+        variables: {
+          input: {
+            orderId: orderQueryId,
+            status: vendorProgressAction.nextStatus,
+            actor: StatusActor.Salon,
+            message: vendorProgressAction.message,
+          },
+        },
+      });
+      await refetchOrder();
+      showToast({
+        type: "success",
+        text: `${vendorProgressAction.label} updated.`,
+      });
+    } catch {
+      showToast({
+        type: "error",
+        text: "Could not update order status. Please try again.",
+      });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!orderQueryId || isUpdatingStatus) {
+      return;
+    }
+
+    setIsUpdatingStatus(true);
+    try {
+      await updateOrderStatus({
+        variables: {
+          input: {
+            orderId: orderQueryId,
+            status: OrderStatus.Cancelled,
+            actor: StatusActor.Salon,
+            message: "Order cancelled by salon",
+          },
+        },
+      });
+      await refetchOrder();
+      showToast({
+        type: "success",
+        text: "Order cancelled.",
+      });
+    } catch {
+      showToast({
+        type: "error",
+        text: "Could not cancel order. Please try again.",
+      });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
   const handleReschedule = () => {
     console.log("Reschedule order");
   };
+
+  const canAcceptOrder = currentStatus === OrderStatus.Created;
+  const canCancelOrder = canAcceptOrder;
 
   return (
     <Container isDark={isDark}>
@@ -583,7 +798,7 @@ export default function OrderDetailsScreen() {
             color={isDark ? Colors.dark.text : Colors.light.text}
           />
         </BackButton>
-        <HeaderTitle isDark={isDark}>Order #{orderId}</HeaderTitle>
+        <HeaderTitle isDark={isDark}>Order #{displayOrderId}</HeaderTitle>
         <HelpButton
           onPress={handleHelp}
           android_ripple={{
@@ -657,6 +872,7 @@ export default function OrderDetailsScreen() {
             <QuickActions>
               <QuickActionButton
                 isDark={isDark}
+                disabled={!hasPhoneNumber}
                 onPress={handleCall}
                 android_ripple={{
                   color: PRIMARY_COLOR + "20",
@@ -668,6 +884,7 @@ export default function OrderDetailsScreen() {
               </QuickActionButton>
               <QuickActionButton
                 isDark={isDark}
+                disabled={!hasPhoneNumber}
                 onPress={handleMessage}
                 android_ripple={{
                   color: PRIMARY_COLOR + "20",
@@ -829,33 +1046,47 @@ export default function OrderDetailsScreen() {
       {/* Sticky Bottom Actions */}
       <BottomActions paddingBottom={insets.bottom} isDark={isDark}>
         <BottomActionsContent>
-          <PrimaryActionButton
-            onPress={handleMarkInProgress}
-            android_ripple={{
-              color: "rgba(255, 255, 255, 0.2)",
-              borderless: false,
-            }}
-          >
-            <MaterialIcons name="play-arrow" size={20} color="#ffffff" />
-            <PrimaryActionButtonText>
-              Mark as In Progress
-            </PrimaryActionButtonText>
-          </PrimaryActionButton>
-          <SecondaryActions>
-            <SecondaryActionButton
-              isDark={isDark}
-              onPress={handleCancel}
+          {(canAcceptOrder || !!vendorProgressAction) && (
+            <PrimaryActionButton
+              onPress={canAcceptOrder ? handleAcceptOrder : handleVendorProgress}
+              disabled={isUpdatingStatus}
               android_ripple={{
-                color: isDark
-                  ? "rgba(255, 255, 255, 0.1)"
-                  : "rgba(0, 0, 0, 0.05)",
+                color: "rgba(255, 255, 255, 0.2)",
                 borderless: false,
               }}
             >
-              <SecondaryActionButtonText isDark={isDark}>
-                Cancel Order
-              </SecondaryActionButtonText>
-            </SecondaryActionButton>
+              {isUpdatingStatus ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <>
+                  <MaterialIcons name="check" size={20} color="#ffffff" />
+                  <PrimaryActionButtonText>
+                    {canAcceptOrder
+                      ? "Accept Order"
+                      : vendorProgressAction?.label || "Update Status"}
+                  </PrimaryActionButtonText>
+                </>
+              )}
+            </PrimaryActionButton>
+          )}
+          <SecondaryActions>
+            {canCancelOrder && (
+              <SecondaryActionButton
+                isDark={isDark}
+                onPress={handleCancel}
+                disabled={isUpdatingStatus}
+                android_ripple={{
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.1)"
+                    : "rgba(0, 0, 0, 0.05)",
+                  borderless: false,
+                }}
+              >
+                <SecondaryActionButtonText isDark={isDark}>
+                  Cancel Order
+                </SecondaryActionButtonText>
+              </SecondaryActionButton>
+            )}
             <SecondaryActionButton
               isDark={isDark}
               outlined

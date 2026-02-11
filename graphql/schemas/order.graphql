@@ -1,5 +1,6 @@
 enum OrderStatus {
   CREATED
+  ACCEPTED_BY_SALON
   PICKUP_ASSIGNED
   PICKED_UP
   AT_SALON
@@ -136,6 +137,7 @@ input PickupAddressInput {
 }
 
 input CreateRevampOrderInput {
+  salonId: ID!
   pickupAddress: PickupAddressInput!
   phoneNumber: String
   hairItems: [HairItemInput!]!
@@ -148,9 +150,26 @@ type CreateRevampOrderPayload {
   order: Order!
 }
 
+input UpdateOrderStatusInput {
+  orderId: ID!
+  status: OrderStatus!
+  actor: StatusActor!
+  message: String
+}
+
+type UpdateOrderStatusPayload {
+  order: Order!
+}
+
 input RecentOrdersInput {
   cursor: String
   limit: Int
+}
+
+input SalonOrdersInput {
+  cursor: String
+  limit: Int
+  salonId: ID
 }
 
 type RecentOrdersConnection {
@@ -164,10 +183,13 @@ extend type Query {
   recentOrdersInProgress(input: RecentOrdersInput): RecentOrdersConnection!
   orderHistory(input: RecentOrdersInput): RecentOrdersConnection!
   order(id: ID!): Order!
+  salonCreatedOrders(input: SalonOrdersInput): RecentOrdersConnection!
+  salonOrders(input: SalonOrdersInput): RecentOrdersConnection!
 }
 
 extend type Mutation {
   createRevampOrder(input: CreateRevampOrderInput!): CreateRevampOrderPayload!
+  updateOrderStatus(input: UpdateOrderStatusInput!): UpdateOrderStatusPayload!
 }
 
 query Services {
@@ -256,6 +278,174 @@ query OrderHistory($input: RecentOrdersInput) {
   }
 }
 
+query SalonCreatedOrders($input: SalonOrdersInput) {
+  salonCreatedOrders(input: $input) {
+    orders {
+      id
+      customerId
+      salonId
+      pickupAddressId
+      status
+      totalAmount
+      createdAt
+      updatedAt
+      items {
+        id
+      }
+      statusEvents {
+        id
+        orderId
+        status
+        message
+        actor
+        createdAt
+      }
+      payments {
+        id
+        orderId
+        customerId
+        provider
+        reference
+        amount
+        status
+      }
+      customer {
+        id
+        fullName
+        email
+        role
+        profileImage
+        authProvider
+        providerId
+      }
+      salon {
+        id
+        name
+        address
+        latitude
+        longitude
+        serviceRadiusKm
+      }
+      pickupAddress {
+        id
+        userId
+        label
+        address
+        latitude
+        longitude
+        isDefault
+      }
+      items {
+        id
+        nameSnapshot
+        priceSnapshot
+        quantity
+        hairType
+        hairLength
+        notes
+        orderItemUrl
+      }
+    }
+    hasNextPage
+    endCursor
+  }
+}
+
+query SalonOrders($input: SalonOrdersInput) {
+  salonOrders(input: $input) {
+    orders {
+      id
+      customerId
+      salonId
+      pickupAddressId
+      pickupAddress {
+        id
+        userId
+        label
+        address
+        latitude
+        longitude
+        isDefault
+      }
+      status
+      totalAmount
+      createdAt
+      updatedAt
+      items {
+        id
+      }
+    }
+    hasNextPage
+    endCursor
+  }
+}
+
+query Order($id: ID!) {
+  order(id: $id) {
+    id
+    customerId
+    salonId
+    pickupAddressId
+    status
+    totalAmount
+    createdAt
+    updatedAt
+    customer {
+      id
+      fullName
+      email
+      role
+      profileImage
+      authProvider
+      providerId
+      createdAt
+      updatedAt
+    }
+    salon {
+      id
+      userId
+      name
+      address
+      latitude
+      longitude
+      serviceRadiusKm
+      rating
+      isVerified
+      imageUrl
+      createdAt
+    }
+    items {
+      id
+      nameSnapshot
+      priceSnapshot
+      quantity
+      hairType
+      hairLength
+      notes
+      orderItemUrl
+    }
+    statusEvents {
+      id
+      orderId
+      status
+      message
+      actor
+      createdAt
+    }
+    payments {
+      id
+      orderId
+      customerId
+      provider
+      reference
+      amount
+      status
+      paidAt
+      createdAt
+    }
+  }
+}
+
 mutation CreateRevampOrder($input: CreateRevampOrderInput!) {
   createRevampOrder(input: $input) {
     order {
@@ -287,6 +477,99 @@ mutation CreateRevampOrder($input: CreateRevampOrderInput!) {
         hairLength
         notes
         orderItemUrl
+      }
+    }
+  }
+}
+
+mutation UpdateOrderStatus($input: UpdateOrderStatusInput!) {
+  updateOrderStatus(input: $input) {
+    order {
+      id
+      customerId
+      salonId
+      pickupAddressId
+      status
+      totalAmount
+      createdAt
+      updatedAt
+      customer {
+        id
+        fullName
+        email
+        role
+        profileImage
+        authProvider
+        providerId
+        createdAt
+        updatedAt
+      }
+      salon {
+        id
+        userId
+        name
+        address
+        latitude
+        longitude
+        serviceRadiusKm
+        rating
+        isVerified
+        imageUrl
+        createdAt
+      }
+      pickupAddress {
+        id
+        userId
+        label
+        address
+        latitude
+        longitude
+        isDefault
+        createdAt
+      }
+      items {
+        id
+        orderId
+        itemType
+        referenceId
+        serviceId
+        nameSnapshot
+        priceSnapshot
+        quantity
+        hairType
+        hairLength
+        notes
+        orderItemUrl
+        createdAt
+        service {
+          id
+          name
+          description
+          basePrice
+          estimatedDays
+          category
+          isActive
+          createdAt
+        }
+      }
+      statusEvents {
+        id
+        orderId
+        status
+        message
+        actor
+        createdAt
+      }
+      payments {
+        id
+        orderId
+        customerId
+        provider
+        reference
+        amount
+        status
+        paidAt
+        createdAt
       }
     }
   }
