@@ -7,25 +7,39 @@ import {
   Spacing,
 } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  OrderStatus,
+  type SalonOrdersQuery,
+  useGetMyProfileQuery,
+  useSalonOrdersQuery,
+} from "@/types/gqlReactTypings.generated";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
+import { ActivityIndicator, RefreshControl } from "react-native";
+import DatePicker from "react-native-date-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
 // Order History Type
 type OrderHistory = {
   id: string;
-  clientName: string;
+  orderDisplayId: string;
+  orderQueryId: string;
+  customerName: string;
+  customerId: string;
   serviceName: string;
   date: string;
   time: string;
   price: string;
-  status: "Completed" | "Cancelled" | "Refunded";
+  status: "Completed" | "Cancelled";
+  rawStatus: OrderStatus;
+  createdAt: Date;
   clientImageUrl?: string;
   serviceIcon: keyof typeof MaterialIcons.glyphMap;
-  month: "this" | "last";
+  month: "this" | "last" | "older";
+  location: string;
 };
 
 // Styled Components
@@ -127,8 +141,8 @@ const FilterChip = styled.Pressable<{ isActive: boolean; isDark: boolean }>`
     props.isActive
       ? PRIMARY_COLOR
       : props.isDark
-      ? Colors.dark.backgroundTertiary
-      : Colors.light.background};
+        ? Colors.dark.backgroundTertiary
+        : Colors.light.background};
   margin-right: ${Spacing.md}px;
   shadow-color: ${(props) =>
     props.isActive ? PRIMARY_COLOR : "rgba(0, 0, 0, 0.05)"};
@@ -146,8 +160,8 @@ const FilterChipText = styled.Text<{ isActive: boolean; isDark: boolean }>`
     props.isActive
       ? "#ffffff"
       : props.isDark
-      ? Colors.dark.textSecondary
-      : Colors.light.textSecondary};
+        ? Colors.dark.textSecondary
+        : Colors.light.textSecondary};
 `;
 
 const HeaderDivider = styled.View<{ isDark: boolean }>`
@@ -168,6 +182,20 @@ const ContentWrapper = styled.View`
   padding: ${Spacing.md}px ${Spacing.xl}px;
   gap: ${Spacing.md}px;
   padding-bottom: ${Spacing["6xl"]}px;
+`;
+
+const EmptyState = styled.View`
+  align-items: center;
+  justify-content: center;
+  padding: ${Spacing["4xl"]}px ${Spacing.md}px;
+  gap: ${Spacing.sm}px;
+`;
+
+const EmptyStateText = styled.Text<{ isDark: boolean }>`
+  font-size: ${FontSizes.sm}px;
+  color: ${(props) =>
+    props.isDark ? Colors.dark.textSecondary : Colors.light.textSecondary};
+  text-align: center;
 `;
 
 const SectionHeader = styled.View`
@@ -211,31 +239,15 @@ const OrderCardContent = styled.View`
 
 const AvatarContainer = styled.View<{ isDark: boolean }>`
   position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: 28px;
-  border-width: 2px;
+
   border-color: ${(props) =>
     props.isDark ? Colors.dark.border : Colors.light.border};
-  overflow: hidden;
 `;
 
 const Avatar = styled(Image)`
   width: 56px;
   height: 56px;
   border-radius: 28px;
-`;
-
-const AvatarPlaceholder = styled.View<{ isDark: boolean }>`
-  width: 56px;
-  height: 56px;
-  border-radius: 28px;
-  background-color: ${(props) =>
-    props.isDark
-      ? Colors.dark.backgroundTertiary
-      : Colors.light.backgroundTertiary};
-  align-items: center;
-  justify-content: center;
 `;
 
 const AvatarInitials = styled.View<{ isDark: boolean }>`
@@ -301,9 +313,17 @@ const ClientName = styled.Text<{ isDark: boolean; isCancelled: boolean }>`
         ? Colors.dark.textTertiary
         : Colors.light.textTertiary
       : props.isDark
-      ? Colors.dark.text
-      : Colors.light.text};
+        ? Colors.dark.text
+        : Colors.light.text};
   flex: 1;
+`;
+
+const CustomerIdText = styled.Text<{ isDark: boolean }>`
+  font-size: ${FontSizes.xs}px;
+  font-weight: ${FontWeights.medium};
+  color: ${(props) =>
+    props.isDark ? Colors.dark.textTertiary : Colors.light.textTertiary};
+  margin-top: 2px;
 `;
 
 const OrderPrice = styled.Text<{ isDark: boolean; isCancelled: boolean }>`
@@ -386,12 +406,109 @@ const StatusDot = styled.View<{ status: string; isDark: boolean }>`
   }};
 `;
 
-type FilterType =
-  | "All"
-  | "Completed"
-  | "Cancelled"
-  | "Refunded"
-  | "Last 30 Days";
+type FilterType = "All" | "Completed" | "Cancelled" | "Last 30 Days";
+
+type ApiOrder = SalonOrdersQuery["salonOrders"]["orders"][number];
+
+const HISTORY_STATUSES = new Set<OrderStatus>([
+  OrderStatus.AcceptedBySalon,
+  OrderStatus.Delivered,
+  OrderStatus.Cancelled,
+]);
+
+const toDate = (value: unknown): Date | null => {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatAmount = (amount: number): string => {
+  return amount.toLocaleString("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    maximumFractionDigits: 0,
+  });
+};
+
+const formatDate = (value: Date): string =>
+  value.toLocaleDateString("en-NG", {
+    month: "short",
+    day: "numeric",
+  });
+
+const formatTime = (value: Date): string =>
+  value.toLocaleTimeString("en-NG", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+const isSameDay = (first: Date, second: Date): boolean => {
+  return (
+    first.getFullYear() === second.getFullYear() &&
+    first.getMonth() === second.getMonth() &&
+    first.getDate() === second.getDate()
+  );
+};
+
+const resolveMonthBucket = (date: Date): "this" | "last" | "older" => {
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  if (date >= thisMonthStart) {
+    return "this";
+  }
+  if (date >= lastMonthStart) {
+    return "last";
+  }
+  return "older";
+};
+
+const formatCustomerName = (name: string): string => {
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+};
+
+const mapOrderToHistory = (order: ApiOrder): OrderHistory | null => {
+  const createdAt = toDate(order.createdAt);
+  if (!createdAt) {
+    return null;
+  }
+
+  const itemCount = order.items.length;
+  const serviceName = itemCount > 1 ? `${itemCount} services` : "Service";
+  const customerName = formatCustomerName(
+    order.customer.fullName?.trim() || "Customer",
+  );
+  const customerId = order.customerId.slice(0, 6).toUpperCase();
+
+  return {
+    id: order.id,
+    orderDisplayId: order.id.slice(-6).toUpperCase(),
+    orderQueryId: order.id,
+    customerName,
+    customerId,
+    serviceName,
+    date: formatDate(createdAt),
+    time: formatTime(createdAt),
+    price: formatAmount(order.totalAmount),
+    status: order.status === OrderStatus.Cancelled ? "Cancelled" : "Completed",
+    rawStatus: order.status,
+    createdAt,
+    clientImageUrl: order.customer.profileImage ?? undefined,
+    serviceIcon: "content-cut",
+    month: resolveMonthBucket(createdAt),
+    location: order.pickupAddress?.address?.trim() || "Address not available",
+  };
+};
 
 export default function HistoryScreen() {
   const router = useRouter();
@@ -402,117 +519,115 @@ export default function HistoryScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [pickerDate, setPickerDate] = useState(new Date());
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Sample order history data
-  const allOrders: OrderHistory[] = [
-    {
-      id: "1",
-      clientName: "Amaka Obi",
-      serviceName: "Braids - Box Braids (Medium)",
-      date: "Oct 24",
-      time: "2:00 PM",
-      price: "₦15,000",
-      status: "Completed",
-      serviceIcon: "content-cut",
-      month: "this",
+  const { data: profileData } = useGetMyProfileQuery();
+  const salonId = profileData?.me.salonProfile?.id;
+  const { data, loading, refetch } = useSalonOrdersQuery({
+    variables: {
+      input: {
+        limit: 100,
+        salonId,
+      },
     },
-    {
-      id: "2",
-      clientName: "Chioma Adebayo",
-      serviceName: "Silk Press & Trim",
-      date: "Oct 22",
-      time: "10:00 AM",
-      price: "₦12,500",
-      status: "Completed",
-      serviceIcon: "spa",
-      month: "this",
-    },
-    {
-      id: "3",
-      clientName: "Zainab Musa",
-      serviceName: "Cornrows - Simple",
-      date: "Sep 28",
-      time: "4:30 PM",
-      price: "₦8,000",
-      status: "Cancelled",
-      serviceIcon: "content-cut",
-      month: "last",
-    },
-    {
-      id: "4",
-      clientName: "Funke Akindele",
-      serviceName: "Full Bridal Package Trial",
-      date: "Sep 15",
-      time: "9:00 AM",
-      price: "₦25,000",
-      status: "Completed",
-      serviceIcon: "face",
-      month: "last",
-    },
-    {
-      id: "5",
-      clientName: "Tolu Balogun",
-      serviceName: "Wash & Blowdry",
-      date: "Sep 10",
-      time: "1:15 PM",
-      price: "₦5,000",
-      status: "Completed",
-      serviceIcon: "content-cut",
-      month: "last",
-    },
-  ];
+    skip: !salonId,
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+  });
 
-  // Filter and search logic
+  const allOrders = useMemo(() => {
+    return (
+      data?.salonOrders.orders
+        .filter((order) => HISTORY_STATUSES.has(order.status))
+        .map(mapOrderToHistory)
+        .filter((order): order is OrderHistory => order !== null)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()) ?? []
+    );
+  }, [data?.salonOrders.orders]);
+
   const filteredOrders = useMemo(() => {
     let filtered = allOrders;
 
-    // Apply status filter
-    if (activeFilter !== "All" && activeFilter !== "Last 30 Days") {
-      filtered = filtered.filter((order) => order.status === activeFilter);
+    if (activeFilter === "Completed") {
+      filtered = filtered.filter(
+        (order) => order.rawStatus === OrderStatus.Delivered,
+      );
+    } else if (activeFilter === "Cancelled") {
+      filtered = filtered.filter(
+        (order) => order.rawStatus === OrderStatus.Cancelled,
+      );
+    } else if (activeFilter === "Last 30 Days") {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      filtered = filtered.filter((order) => order.createdAt >= thirtyDaysAgo);
     }
 
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (order) =>
-          order.clientName.toLowerCase().includes(query) ||
-          order.serviceName.toLowerCase().includes(query)
+          order.customerName.toLowerCase().includes(query) ||
+          order.customerId.toLowerCase().includes(query) ||
+          order.serviceName.toLowerCase().includes(query),
       );
     }
 
-    // Group by month
+    if (selectedDate) {
+      filtered = filtered.filter((order) =>
+        isSameDay(order.createdAt, selectedDate),
+      );
+    }
+
     const thisMonth = filtered.filter((order) => order.month === "this");
     const lastMonth = filtered.filter((order) => order.month === "last");
+    const older = filtered.filter((order) => order.month === "older");
 
-    return { thisMonth, lastMonth };
-  }, [searchQuery, activeFilter]);
+    return { thisMonth, lastMonth, older, total: filtered.length };
+  }, [activeFilter, allOrders, searchQuery, selectedDate]);
 
   const handleOrderPress = (order: OrderHistory) => {
     router.push({
       pathname: "/order-details",
       params: {
-        orderId: order.id,
-        status: order.status,
+        orderId: order.orderDisplayId,
+        orderQueryId: order.orderQueryId,
+        status: order.rawStatus,
         placedDate: `${order.date} • ${order.time}`,
         serviceTitle: order.serviceName,
-        clientName: order.clientName,
-        clientAddress: "Address not available",
-        rating: "4.8",
-        orderCount: "5",
+        clientName: order.customerName,
+        clientAddress: order.location,
+        rating: "0.0",
+        orderCount: "0",
         dateTime: `${order.date} • ${order.time}`,
-        duration: "4 Hours",
+        duration: "N/A",
         locationType: "Home Service",
         serviceCost: order.price,
-        transportFee: "₦2,000",
+        transportFee: formatAmount(0),
         totalPaid: order.price,
-        paymentMethod: "Paid via Transfer",
+        paymentMethod: "Payment details unavailable",
       },
     });
   };
 
   const handleCalendarPress = () => {
-    console.log("Open calendar");
+    setPickerDate(selectedDate || new Date());
+    setIsDatePickerOpen(true);
+  };
+
+  const clearDateFilter = () => {
+    setSelectedDate(null);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const getInitials = (name: string): string => {
@@ -543,24 +658,12 @@ export default function HistoryScreen() {
           <AvatarContainer isDark={isDark}>
             {hasImage ? (
               <Avatar source={{ uri: order.clientImageUrl }} />
-            ) : order.clientName === "Tolu Balogun" ? (
+            ) : (
               <AvatarInitials isDark={isDark}>
                 <AvatarInitialsText>
-                  {getInitials(order.clientName)}
+                  {getInitials(order.customerName)}
                 </AvatarInitialsText>
               </AvatarInitials>
-            ) : (
-              <AvatarPlaceholder isDark={isDark}>
-                <MaterialIcons
-                  name="person"
-                  size={32}
-                  color={
-                    isDark
-                      ? Colors.dark.textSecondary
-                      : Colors.light.textSecondary
-                  }
-                />
-              </AvatarPlaceholder>
             )}
             <ServiceIconBadge isDark={isDark}>
               <ServiceIconContainer>
@@ -576,12 +679,15 @@ export default function HistoryScreen() {
           <OrderInfo>
             <OrderHeader>
               <ClientName isDark={isDark} isCancelled={isCancelled}>
-                {order.clientName}
+                {order.customerName}
               </ClientName>
               <OrderPrice isDark={isDark} isCancelled={isCancelled}>
                 {order.price}
               </OrderPrice>
             </OrderHeader>
+            <CustomerIdText isDark={isDark}>
+              Customer ID: {order.customerId}
+            </CustomerIdText>
             <ServiceName isDark={isDark}>{order.serviceName}</ServiceName>
             <OrderFooter>
               <OrderDateTime isDark={isDark}>
@@ -670,13 +776,7 @@ export default function HistoryScreen() {
             contentContainerStyle={{ paddingRight: Spacing.xl }}
           >
             {(
-              [
-                "All",
-                "Completed",
-                "Cancelled",
-                "Refunded",
-                "Last 30 Days",
-              ] as FilterType[]
+              ["All", "Completed", "Cancelled", "Last 30 Days"] as FilterType[]
             ).map((filter) => (
               <FilterChip
                 key={filter}
@@ -698,6 +798,23 @@ export default function HistoryScreen() {
                 </FilterChipText>
               </FilterChip>
             ))}
+            {selectedDate && (
+              <FilterChip
+                isActive
+                isDark={isDark}
+                onPress={clearDateFilter}
+                android_ripple={{
+                  color: isDark
+                    ? "rgba(255, 255, 255, 0.1)"
+                    : "rgba(0, 0, 0, 0.05)",
+                  borderless: false,
+                }}
+              >
+                <FilterChipText isActive isDark={isDark}>
+                  {`Date: ${formatDate(selectedDate)} ✕`}
+                </FilterChipText>
+              </FilterChip>
+            )}
           </FilterScrollView>
         </FilterContainer>
 
@@ -710,9 +827,26 @@ export default function HistoryScreen() {
         contentContainerStyle={{
           flexGrow: 1,
         }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={PRIMARY_COLOR}
+            colors={[PRIMARY_COLOR]}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
         <ContentWrapper>
+          {loading && allOrders.length === 0 && (
+            <EmptyState>
+              <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+              <EmptyStateText isDark={isDark}>
+                Loading order history...
+              </EmptyStateText>
+            </EmptyState>
+          )}
+
           {/* This Month Section */}
           {filteredOrders.thisMonth.length > 0 && (
             <>
@@ -736,8 +870,47 @@ export default function HistoryScreen() {
               {filteredOrders.lastMonth.map((order) => renderOrderCard(order))}
             </>
           )}
+
+          {filteredOrders.older.length > 0 && (
+            <>
+              <SectionHeader>
+                <SectionHeaderText isDark={isDark}>Older</SectionHeaderText>
+              </SectionHeader>
+              {filteredOrders.older.map((order) => renderOrderCard(order))}
+            </>
+          )}
+
+          {!loading && filteredOrders.total === 0 && (
+            <EmptyState>
+              <MaterialIcons
+                name="history"
+                size={24}
+                color={
+                  isDark
+                    ? Colors.dark.textSecondary
+                    : Colors.light.textSecondary
+                }
+              />
+              <EmptyStateText isDark={isDark}>
+                No order history found for the selected filters.
+              </EmptyStateText>
+            </EmptyState>
+          )}
         </ContentWrapper>
       </ScrollContent>
+      <DatePicker
+        modal
+        open={isDatePickerOpen}
+        date={pickerDate}
+        mode="date"
+        onConfirm={(date: Date) => {
+          setIsDatePickerOpen(false);
+          setSelectedDate(date);
+        }}
+        onCancel={() => {
+          setIsDatePickerOpen(false);
+        }}
+      />
     </Container>
   );
 }

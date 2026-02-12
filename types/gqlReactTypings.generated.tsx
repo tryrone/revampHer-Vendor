@@ -512,7 +512,7 @@ export type SalonOrdersQueryVariables = Exact<{
 }>;
 
 
-export type SalonOrdersQuery = { __typename?: 'Query', salonOrders: { __typename?: 'RecentOrdersConnection', hasNextPage: boolean, endCursor?: string | undefined, orders: Array<{ __typename?: 'Order', id: string, customerId: string, salonId?: string | undefined, pickupAddressId: string, status: OrderStatus, totalAmount: number, createdAt: any, updatedAt: any, pickupAddress: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean }, items: Array<{ __typename?: 'OrderItem', id: string }> }> } };
+export type SalonOrdersQuery = { __typename?: 'Query', salonOrders: { __typename?: 'RecentOrdersConnection', hasNextPage: boolean, endCursor?: string | undefined, orders: Array<{ __typename?: 'Order', id: string, customerId: string, salonId?: string | undefined, pickupAddressId: string, status: OrderStatus, totalAmount: number, createdAt: any, updatedAt: any, customer: { __typename?: 'User', id: string, fullName: string, email?: string | undefined, role: UserRole, profileImage?: string | undefined, authProvider: AuthProvider, providerId: string }, salon?: { __typename?: 'Salon', id: string, name: string, address: string, latitude: number, longitude: number, serviceRadiusKm: number } | undefined, pickupAddress: { __typename?: 'Address', id?: string | undefined, userId?: string | undefined, label?: string | undefined, address: string, latitude: number, longitude: number, isDefault: boolean }, items: Array<{ __typename?: 'OrderItem', id: string }> }> } };
 
 export type OrderQueryVariables = Exact<{
   id: Scalars['ID'];
@@ -1080,7 +1080,24 @@ export const SalonOrdersDocument = gql`
     orders {
       id
       customerId
+      customer {
+        id
+        fullName
+        email
+        role
+        profileImage
+        authProvider
+        providerId
+      }
       salonId
+      salon {
+        id
+        name
+        address
+        latitude
+        longitude
+        serviceRadiusKm
+      }
       pickupAddressId
       pickupAddress {
         id

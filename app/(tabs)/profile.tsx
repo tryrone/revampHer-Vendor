@@ -1,3 +1,4 @@
+import AnimatedScaleModal from "@/components/AnimatedScaleModal";
 import { ENV } from "@/constants";
 import {
   BorderRadius,
@@ -21,7 +22,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, TextInput, View } from "react-native";
+import { ActivityIndicator, TextInput, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -161,6 +162,7 @@ const LocationText = styled.Text<{ isDark: boolean }>`
   font-weight: ${FontWeights.medium};
   color: ${(props) => (props.isDark ? Colors.dark.textSecondary : "#4e7397")};
   margin-top: ${Spacing.xs}px;
+  text-align: center;
 `;
 
 const VerifiedBadge = styled.View<{ isDark: boolean }>`
@@ -345,13 +347,6 @@ const LogoutButtonText = styled.Text<{ isDark: boolean }>`
 
 // Logout modal
 const LOGOUT_ICON_COLOR = "#dc2626";
-const ModalOverlay = styled.Pressable`
-  flex: 1;
-  background-color: rgba(0, 0, 0, 0.5);
-  justify-content: center;
-  align-items: center;
-  padding: ${Spacing.xl}px;
-`;
 const LogoutModalBox = styled.View<{ isDark: boolean }>`
   width: 100%;
   max-width: 340px;
@@ -468,8 +463,8 @@ const ToggleContainer = styled.Pressable<{
     props.isChecked
       ? PRIMARY_COLOR
       : props.isDark
-      ? Colors.dark.border
-      : "#e2e8f0"};
+        ? Colors.dark.border
+        : "#e2e8f0"};
   padding: ${Spacing.xs}px;
   justify-content: center;
 `;
@@ -1193,113 +1188,109 @@ export default function ProfileScreen() {
       </ScrollContent>
 
       {/* Edit business profile modal */}
-      <Modal
+      <AnimatedScaleModal
         visible={showEditProfileModal}
-        transparent
-        animationType="fade"
         onRequestClose={() => setShowEditProfileModal(false)}
       >
-        <ModalOverlay onPress={() => setShowEditProfileModal(false)}>
-          <LogoutModalBox isDark={isDark}>
-            <LogoutModalTitle isDark={isDark}>Edit Business Profile</LogoutModalTitle>
-            <EditModalForm>
-              <View>
-                <EditModalLabel isDark={isDark}>Business Name</EditModalLabel>
-                <EditModalInput
-                  isDark={isDark}
-                  value={editBusinessName}
-                  onChangeText={setEditBusinessName}
-                  placeholder="Business Name"
-                  placeholderTextColor={
-                    isDark ? Colors.dark.textTertiary : Colors.light.textTertiary
-                  }
-                />
-              </View>
-              <View>
-                <EditModalLabel isDark={isDark}>Business Address</EditModalLabel>
-                <EditModalInput
-                  isDark={isDark}
-                  value={editBusinessAddress}
-                  onChangeText={setEditBusinessAddress}
-                  placeholder="Business Address"
-                  placeholderTextColor={
-                    isDark ? Colors.dark.textTertiary : Colors.light.textTertiary
-                  }
-                />
-              </View>
-            </EditModalForm>
-            <LogoutModalButtons>
-              <LogoutModalConfirmButton
-                onPress={handleSaveBusinessProfile}
-                android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
-                disabled={savingProfile}
-              >
-                {savingProfile ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <LogoutModalConfirmButtonText>Save</LogoutModalConfirmButtonText>
-                )}
-              </LogoutModalConfirmButton>
-              <LogoutModalCancelButton
+        <LogoutModalBox isDark={isDark}>
+          <LogoutModalTitle isDark={isDark}>
+            Edit Business Profile
+          </LogoutModalTitle>
+          <EditModalForm>
+            <View>
+              <EditModalLabel isDark={isDark}>Business Name</EditModalLabel>
+              <EditModalInput
                 isDark={isDark}
-                onPress={() => setShowEditProfileModal(false)}
-                android_ripple={{
-                  color: isDark
-                    ? "rgba(255, 255, 255, 0.05)"
-                    : "rgba(0, 0, 0, 0.05)",
-                }}
-              >
-                <LogoutModalCancelButtonText isDark={isDark}>
-                  Cancel
-                </LogoutModalCancelButtonText>
-              </LogoutModalCancelButton>
-            </LogoutModalButtons>
-          </LogoutModalBox>
-        </ModalOverlay>
-      </Modal>
+                value={editBusinessName}
+                onChangeText={setEditBusinessName}
+                placeholder="Business Name"
+                placeholderTextColor={
+                  isDark ? Colors.dark.textTertiary : Colors.light.textTertiary
+                }
+              />
+            </View>
+            <View>
+              <EditModalLabel isDark={isDark}>Business Address</EditModalLabel>
+              <EditModalInput
+                isDark={isDark}
+                value={editBusinessAddress}
+                onChangeText={setEditBusinessAddress}
+                placeholder="Business Address"
+                placeholderTextColor={
+                  isDark ? Colors.dark.textTertiary : Colors.light.textTertiary
+                }
+              />
+            </View>
+          </EditModalForm>
+          <LogoutModalButtons>
+            <LogoutModalConfirmButton
+              onPress={handleSaveBusinessProfile}
+              android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
+              disabled={savingProfile}
+            >
+              {savingProfile ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <LogoutModalConfirmButtonText>
+                  Save
+                </LogoutModalConfirmButtonText>
+              )}
+            </LogoutModalConfirmButton>
+            <LogoutModalCancelButton
+              isDark={isDark}
+              onPress={() => setShowEditProfileModal(false)}
+              android_ripple={{
+                color: isDark
+                  ? "rgba(255, 255, 255, 0.05)"
+                  : "rgba(0, 0, 0, 0.05)",
+              }}
+            >
+              <LogoutModalCancelButtonText isDark={isDark}>
+                Cancel
+              </LogoutModalCancelButtonText>
+            </LogoutModalCancelButton>
+          </LogoutModalButtons>
+        </LogoutModalBox>
+      </AnimatedScaleModal>
 
       {/* Logout confirmation modal */}
-      <Modal
+      <AnimatedScaleModal
         visible={showLogoutModal}
-        transparent
-        animationType="fade"
         onRequestClose={handleCancelLogout}
       >
-        <ModalOverlay onPress={handleCancelLogout}>
-          <LogoutModalBox isDark={isDark}>
-            <LogoutModalIconCircle>
-              <MaterialIcons name="logout" size={28} color="#ffffff" />
-            </LogoutModalIconCircle>
-            <LogoutModalTitle isDark={isDark}>Logout</LogoutModalTitle>
-            <LogoutModalMessage isDark={isDark}>
-              Are you sure you want to log out of your account?
-            </LogoutModalMessage>
-            <LogoutModalButtons>
-              <LogoutModalConfirmButton
-                onPress={handleConfirmLogout}
-                android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
-              >
-                <LogoutModalConfirmButtonText>
-                  Log Out
-                </LogoutModalConfirmButtonText>
-              </LogoutModalConfirmButton>
-              <LogoutModalCancelButton
-                isDark={isDark}
-                onPress={handleCancelLogout}
-                android_ripple={{
-                  color: isDark
-                    ? "rgba(255, 255, 255, 0.05)"
-                    : "rgba(0, 0, 0, 0.05)",
-                }}
-              >
-                <LogoutModalCancelButtonText isDark={isDark}>
-                  Cancel
-                </LogoutModalCancelButtonText>
-              </LogoutModalCancelButton>
-            </LogoutModalButtons>
-          </LogoutModalBox>
-        </ModalOverlay>
-      </Modal>
+        <LogoutModalBox isDark={isDark}>
+          <LogoutModalIconCircle>
+            <MaterialIcons name="logout" size={28} color="#ffffff" />
+          </LogoutModalIconCircle>
+          <LogoutModalTitle isDark={isDark}>Logout</LogoutModalTitle>
+          <LogoutModalMessage isDark={isDark}>
+            Are you sure you want to log out of your account?
+          </LogoutModalMessage>
+          <LogoutModalButtons>
+            <LogoutModalConfirmButton
+              onPress={handleConfirmLogout}
+              android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
+            >
+              <LogoutModalConfirmButtonText>
+                Log Out
+              </LogoutModalConfirmButtonText>
+            </LogoutModalConfirmButton>
+            <LogoutModalCancelButton
+              isDark={isDark}
+              onPress={handleCancelLogout}
+              android_ripple={{
+                color: isDark
+                  ? "rgba(255, 255, 255, 0.05)"
+                  : "rgba(0, 0, 0, 0.05)",
+              }}
+            >
+              <LogoutModalCancelButtonText isDark={isDark}>
+                Cancel
+              </LogoutModalCancelButtonText>
+            </LogoutModalCancelButton>
+          </LogoutModalButtons>
+        </LogoutModalBox>
+      </AnimatedScaleModal>
     </Container>
   );
 }

@@ -202,7 +202,10 @@ const QuickActions = styled.View`
   gap: ${Spacing.md}px;
 `;
 
-const QuickActionButton = styled.Pressable<{ isDark: boolean; disabled?: boolean }>`
+const QuickActionButton = styled.Pressable<{
+  isDark: boolean;
+  disabled?: boolean;
+}>`
   flex: 1;
   height: 40px;
   flex-direction: row;
@@ -394,7 +397,6 @@ const PaymentDivider = styled.View<{ isDark: boolean }>`
   border-top-width: 1px;
   border-top-color: ${(props) =>
     props.isDark ? Colors.dark.border : Colors.light.border};
-  border-style: dashed;
   margin: ${Spacing.md}px 0;
 `;
 
@@ -543,7 +545,10 @@ export default function OrderDetailsScreen() {
   const statusFromParams = (params.status as string) || "CONFIRMED";
   const effectiveStatus = orderData?.order.status ?? null;
   const statusFromParamsEnum = useMemo(() => {
-    const normalized = statusFromParams.trim().toUpperCase().replace(/\s+/g, "_");
+    const normalized = statusFromParams
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "_");
     return (Object.values(OrderStatus) as string[]).includes(normalized)
       ? (normalized as OrderStatus)
       : null;
@@ -569,13 +574,14 @@ export default function OrderDetailsScreen() {
     return total + (item.service?.estimatedDays ?? 0);
   }, 0);
   const durationFromOrder =
-    orderData?.order.requestedReturnDays && orderData.order.requestedReturnDays > 0
+    orderData?.order.requestedReturnDays &&
+    orderData.order.requestedReturnDays > 0
       ? `${orderData.order.requestedReturnDays} ${
           orderData.order.requestedReturnDays === 1 ? "Day" : "Days"
         }`
       : estimatedDurationDays && estimatedDurationDays > 0
-      ? `${estimatedDurationDays} ${estimatedDurationDays === 1 ? "Day" : "Days"}`
-      : "";
+        ? `${estimatedDurationDays} ${estimatedDurationDays === 1 ? "Day" : "Days"}`
+        : "";
   const duration = durationFromOrder || (params.duration as string) || "N/A";
   const locationType = (params.locationType as string) || "Home Service";
   const serviceCost = (params.serviceCost as string) || "₦15,000";
@@ -1048,7 +1054,9 @@ export default function OrderDetailsScreen() {
         <BottomActionsContent>
           {(canAcceptOrder || !!vendorProgressAction) && (
             <PrimaryActionButton
-              onPress={canAcceptOrder ? handleAcceptOrder : handleVendorProgress}
+              onPress={
+                canAcceptOrder ? handleAcceptOrder : handleVendorProgress
+              }
               disabled={isUpdatingStatus}
               android_ripple={{
                 color: "rgba(255, 255, 255, 0.2)",

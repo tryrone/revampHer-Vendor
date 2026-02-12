@@ -351,6 +351,13 @@ const OrderClientImagePlaceholder = styled.View<{ isDark: boolean }>`
   justify-content: center;
 `;
 
+const OrderClientInitials = styled.Text<{ isDark: boolean }>`
+  font-size: ${FontSizes.lg}px;
+  font-weight: ${FontWeights.bold};
+  color: ${(props) =>
+    props.isDark ? Colors.dark.textSecondary : Colors.light.textSecondary};
+`;
+
 const OrderClientDetails = styled.View`
   flex: 1;
   gap: ${Spacing.xs}px;
@@ -413,6 +420,21 @@ const OrderPrice = styled.Text<{ isDark: boolean }>`
   font-size: ${FontSizes.lg}px;
   font-weight: ${FontWeights.bold};
   color: ${(props) => (props.isDark ? Colors.dark.text : Colors.light.text)};
+`;
+
+const OrderStatusBadge = styled.View<{ isDark: boolean }>`
+  padding: ${Spacing.xs}px ${Spacing.sm + 2}px;
+  border-radius: ${BorderRadius.full}px;
+  background-color: ${(props) =>
+    props.isDark ? "rgba(148, 163, 184, 0.2)" : "rgba(226, 232, 240, 0.7)"};
+`;
+
+const OrderStatusBadgeText = styled.Text<{ isDark: boolean }>`
+  font-size: ${FontSizes.xs}px;
+  font-weight: ${FontWeights.semibold};
+  color: ${(props) =>
+    props.isDark ? Colors.dark.textSecondary : Colors.light.textSecondary};
+  text-transform: capitalize;
 `;
 
 const OrderActions = styled.View`
@@ -541,12 +563,37 @@ const formatDateTime = (value: unknown): string => {
 const statusLabel = (status: OrderStatus): string =>
   status.replace(/_/g, " ").toUpperCase();
 
+const readableStatus = (status: OrderStatus): string =>
+  status
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const formatPersonName = (name: string): string => {
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+};
+
+const getInitials = (name: string): string => {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+};
+
 const getCustomerName = (order: ApiOrder): string => {
   if ("customer" in order && order.customer?.fullName?.trim()) {
-    return order.customer.fullName.trim();
+    return formatPersonName(order.customer.fullName);
   }
 
-  return `Customer ${order.customerId.slice(0, 6)}`;
+  return `Customer ${order.customerId.slice(0, 6).toUpperCase()}`;
 };
 
 const getCustomerLocation = (order: ApiOrder): string => {
@@ -1001,15 +1048,9 @@ export default function HomeScreen() {
                   <OrderHeader>
                     <OrderClientInfo>
                       <OrderClientImagePlaceholder isDark={isDark}>
-                        <MaterialIcons
-                          name="person"
-                          size={24}
-                          color={
-                            isDark
-                              ? Colors.dark.textSecondary
-                              : Colors.light.textSecondary
-                          }
-                        />
+                        <OrderClientInitials isDark={isDark}>
+                          {getInitials(order.clientName)}
+                        </OrderClientInitials>
                       </OrderClientImagePlaceholder>
                       <OrderClientDetails>
                         <OrderClientName isDark={isDark}>
@@ -1084,6 +1125,14 @@ export default function HomeScreen() {
                         </AcceptButton>
                       </OrderActions>
                     )}
+                    {activeTab === "active" &&
+                      order.rawStatus !== OrderStatus.Created && (
+                        <OrderStatusBadge isDark={isDark}>
+                          <OrderStatusBadgeText isDark={isDark}>
+                            {readableStatus(order.rawStatus)}
+                          </OrderStatusBadgeText>
+                        </OrderStatusBadge>
+                      )}
                   </OrderFooter>
                 </OrderCard>
               ))

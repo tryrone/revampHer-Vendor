@@ -356,7 +356,24 @@ query SalonOrders($input: SalonOrdersInput) {
     orders {
       id
       customerId
+      customer {
+        id
+        fullName
+        email
+        role
+        profileImage
+        authProvider
+        providerId
+      }
       salonId
+      salon {
+        id
+        name
+        address
+        latitude
+        longitude
+        serviceRadiusKm
+      }
       pickupAddressId
       pickupAddress {
         id
