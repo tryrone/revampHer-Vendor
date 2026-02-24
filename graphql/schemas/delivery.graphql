@@ -1,0 +1,47 @@
+type Delivery {
+  id: ID!
+  orderId: String!
+  providerJobId: String!
+  status: String!
+  trackingUrl: String
+  cost: Float
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+input CreateDeliveryInput {
+  orderId: ID!
+  pickupAddress: String!
+  pickupName: String!
+  pickupPhone: String!
+  dropoffAddress: String!
+  dropoffName: String!
+  dropoffPhone: String!
+  description: String!
+  scheduledAt: DateTime
+}
+
+extend type Mutation {
+  createDelivery(input: CreateDeliveryInput!): Delivery!
+  retryDeliveryDispatch(orderId: ID!): Boolean!
+}
+
+input EstimateDeliveryFeeInput {
+  pickupAddress: String!
+  pickupLatitude: Float!
+  pickupLongitude: Float!
+  pickupPhone: String!
+  salonId: ID!
+}
+
+type DeliveryFeeEstimate {
+  pickupFee: Float!
+  deliveryFee: Float!
+  returnFee: Float!
+  totalDeliveryFee: Float!
+}
+
+extend type Query {
+  estimateDeliveryFee(input: EstimateDeliveryFeeInput!): DeliveryFeeEstimate!
+}
+

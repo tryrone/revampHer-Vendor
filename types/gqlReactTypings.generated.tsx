@@ -53,7 +53,20 @@ export type CompleteSalonOnboardingInput = {
   serviceRadiusKm?: InputMaybe<Scalars['Int']>;
 };
 
+export type CreateDeliveryInput = {
+  description: Scalars['String'];
+  dropoffAddress: Scalars['String'];
+  dropoffName: Scalars['String'];
+  dropoffPhone: Scalars['String'];
+  orderId: Scalars['ID'];
+  pickupAddress: Scalars['String'];
+  pickupName: Scalars['String'];
+  pickupPhone: Scalars['String'];
+  scheduledAt?: InputMaybe<Scalars['DateTime']>;
+};
+
 export type CreateRevampOrderInput = {
+  deliveryFee?: InputMaybe<Scalars['Float']>;
   hairItems: Array<HairItemInput>;
   notes?: InputMaybe<Scalars['String']>;
   phoneNumber?: InputMaybe<Scalars['String']>;
@@ -66,6 +79,34 @@ export type CreateRevampOrderInput = {
 export type CreateRevampOrderPayload = {
   __typename?: 'CreateRevampOrderPayload';
   order: Order;
+};
+
+export type Delivery = {
+  __typename?: 'Delivery';
+  cost?: Maybe<Scalars['Float']>;
+  createdAt: Scalars['DateTime'];
+  id: Scalars['ID'];
+  orderId: Scalars['String'];
+  providerJobId: Scalars['String'];
+  status: Scalars['String'];
+  trackingUrl?: Maybe<Scalars['String']>;
+  updatedAt: Scalars['DateTime'];
+};
+
+export type DeliveryFeeEstimate = {
+  __typename?: 'DeliveryFeeEstimate';
+  deliveryFee: Scalars['Float'];
+  pickupFee: Scalars['Float'];
+  returnFee: Scalars['Float'];
+  totalDeliveryFee: Scalars['Float'];
+};
+
+export type EstimateDeliveryFeeInput = {
+  pickupAddress: Scalars['String'];
+  pickupLatitude: Scalars['Float'];
+  pickupLongitude: Scalars['Float'];
+  pickupPhone: Scalars['String'];
+  salonId: Scalars['ID'];
 };
 
 export type HairItemInput = {
@@ -86,10 +127,12 @@ export type Mutation = {
   __typename?: 'Mutation';
   _empty?: Maybe<Scalars['String']>;
   completeSalonOnboarding: Salon;
+  createDelivery: Delivery;
   createRevampOrder: CreateRevampOrderPayload;
   loginWithEmail: AuthPayload;
   loginWithOAuth: AuthPayload;
   registerWithEmail: AuthPayload;
+  retryDeliveryDispatch: Scalars['Boolean'];
   sendEmailVerificationOtp: SendEmailOtpPayload;
   setSalonOnline: Salon;
   updateOrderStatus: UpdateOrderStatusPayload;
@@ -101,6 +144,11 @@ export type Mutation = {
 
 export type MutationCompleteSalonOnboardingArgs = {
   input: CompleteSalonOnboardingInput;
+};
+
+
+export type MutationCreateDeliveryArgs = {
+  input: CreateDeliveryInput;
 };
 
 
@@ -121,6 +169,11 @@ export type MutationLoginWithOAuthArgs = {
 
 export type MutationRegisterWithEmailArgs = {
   input: RegisterWithEmailInput;
+};
+
+
+export type MutationRetryDeliveryDispatchArgs = {
+  orderId: Scalars['ID'];
 };
 
 
@@ -174,6 +227,7 @@ export type Order = {
   createdAt: Scalars['DateTime'];
   customer: User;
   customerId: Scalars['String'];
+  deliveryFee?: Maybe<Scalars['Float']>;
   id: Scalars['ID'];
   items: Array<OrderItem>;
   payments: Array<Payment>;
@@ -259,6 +313,7 @@ export type PickupAddressInput = {
 export type Query = {
   __typename?: 'Query';
   _empty?: Maybe<Scalars['String']>;
+  estimateDeliveryFee: DeliveryFeeEstimate;
   getMyProfile: User;
   me: User;
   mySalon?: Maybe<Salon>;
@@ -270,6 +325,11 @@ export type Query = {
   salons: Array<Salon>;
   salonsNearLocation: Array<Salon>;
   services: Array<Service>;
+};
+
+
+export type QueryEstimateDeliveryFeeArgs = {
+  input: EstimateDeliveryFeeInput;
 };
 
 

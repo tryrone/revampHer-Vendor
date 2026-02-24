@@ -80,6 +80,7 @@ type Order {
   phoneNumber: String
   status: OrderStatus!
   totalAmount: Float!
+  deliveryFee: Float
   requestedReturnDate: DateTime
   requestedReturnDays: Int
   createdAt: DateTime!
@@ -144,6 +145,7 @@ input CreateRevampOrderInput {
   notes: String
   requestedReturnDate: DateTime
   requestedReturnDays: Int
+  deliveryFee: Float
 }
 
 type CreateRevampOrderPayload {
